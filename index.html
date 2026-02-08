@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>医学年会2024</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <i class="fas fa-heartbeat"></i>
+                <span>医学年会2024</span>
+            </div>
+            <div class="nav-menu">
+                <a href="#home" class="active"><i class="fas fa-home"></i> 首页</a>
+                <a href="#experts"><i class="fas fa-user-md"></i> 专家库</a>
+                <a href="#schedule"><i class="fas fa-calendar-alt"></i> 日程</a>
+                <a href="#gallery"><i class="fas fa-images"></i> 会议内容</a>
+                <a href="#forum"><i class="fas fa-comments"></i> 论坛</a>
+                <a href="#sponsors"><i class="fas fa-handshake"></i> 赞助商</a>
+                <a href="#profile"><i class="fas fa-id-card"></i> 我的名片</a>
+            </div>
+            <button class="menu-toggle">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- 主要内容区 -->
+    <main class="main-content">
+        <!-- 各页面内容会通过JavaScript动态加载 -->
+        <div id="page-content"></div>
+    </main>
+
+    <!-- 底部 -->
+    <footer class="footer">
+        <p>© 2024 医学年会 | 技术支持：组织名称</p>
+    </footer>
+
+    <!-- 加载JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
