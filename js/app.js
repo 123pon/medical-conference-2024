@@ -2,47 +2,75 @@
 class MedicalConferenceUtils {
     constructor(app) {
         this.app = app;
+        console.log('MedicalConferenceUtils 初始化，app:', app);
         this.init();
     }
     
     init() {
+        console.log('MedicalConferenceUtils.init()');
+        
+        // 确保 this.app 存在
+        if (!this.app) {
+            console.warn('MedicalConferenceUtils: app 对象未初始化');
+            return;
+        }
+        
         this.setupKeyboardShortcuts();
         this.setupOfflineDetection();
         this.setupPrintButton();
         this.setupDataExport();
         this.setupBackToTop();
+        
+        // 延迟添加搜索功能（确保DOM完全加载）
+        setTimeout(() => {
+            if (this.app && typeof this.app.currentPage !== 'undefined' && this.app.currentPage === 'home') {
+                this.addSearchFunctionality();
+            }
+        }, 1500);
     }
     
     // 设置键盘快捷键
     setupKeyboardShortcuts() {
+        if (!this.app) return;
+        
         document.addEventListener('keydown', (e) => {
+            if (!this.app) return; // 双重检查
+            
             // Ctrl+H 或 Cmd+H 返回首页
             if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
                 e.preventDefault();
-                this.app.navigateTo('home');
+                if (this.app.loadPage) {
+                    this.app.loadPage('home');
+                }
             }
             
             // Esc 键关闭右侧边栏
-            if (e.key === 'Escape' && !this.app.state.rightSidebarCollapsed) {
-                this.app.toggleRightSidebar();
+            if (e.key === 'Escape' && typeof this.app.rightSidebarCollapsed !== 'undefined' && !this.app.rightSidebarCollapsed) {
+                if (this.app.toggleRightSidebar) {
+                    this.app.toggleRightSidebar();
+                }
             }
             
             // Ctrl+B 或 Cmd+B 切换左侧边栏
             if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
                 e.preventDefault();
-                this.app.toggleLeftSidebar();
+                if (this.app.toggleLeftSidebar) {
+                    this.app.toggleLeftSidebar();
+                }
             }
         });
     }
     
     // 设置离线检测
     setupOfflineDetection() {
+        const self = this;
+        
         window.addEventListener('online', () => {
-            this.showNotification('网络连接已恢复', 'success');
+            self.showNotification('网络连接已恢复', 'success');
         });
         
         window.addEventListener('offline', () => {
-            this.showNotification('网络连接已断开，部分功能可能受限', 'warning');
+            self.showNotification('网络连接已断开，部分功能可能受限', 'warning');
         });
     }
     
@@ -114,9 +142,9 @@ class MedicalConferenceUtils {
             window.print();
         });
         
-        const profileNav = document.querySelector('.profile-nav-menu');
+        const profileNav = document.querySelector('.right-sidebar-nav');
         if (profileNav) {
-            profileNav.insertBefore(printBtn, profileNav.lastElementChild);
+            profileNav.appendChild(printBtn);
         }
     }
     
@@ -133,9 +161,9 @@ class MedicalConferenceUtils {
                 this.showDataManagement();
             });
             
-            const profileNav = document.querySelector('.profile-nav-menu');
+            const profileNav = document.querySelector('.right-sidebar-nav');
             if (profileNav) {
-                profileNav.insertBefore(dataBtn, profileNav.lastElementChild);
+                profileNav.appendChild(dataBtn);
             }
         }
     }
@@ -165,11 +193,16 @@ class MedicalConferenceUtils {
     
     // 导出数据
     exportData() {
+        if (!this.app) {
+            alert('应用未初始化');
+            return;
+        }
+        
         const data = {
-            experts: this.app.state.experts,
-            topics: this.app.state.topics,
-            sponsors: this.app.state.sponsors,
-            userProfile: this.app.state.userProfile,
+            experts: this.app.experts || [],
+            topics: this.app.topics || [],
+            sponsors: this.app.sponsors || [],
+            userProfile: this.app.userProfile || null,
             exportDate: new Date().toISOString()
         };
         
@@ -200,22 +233,24 @@ class MedicalConferenceUtils {
                     const data = JSON.parse(event.target.result);
                     
                     if (confirm('导入数据将覆盖当前数据，确定要导入吗？')) {
-                        if (data.experts) this.app.state.experts = data.experts;
-                        if (data.topics) this.app.state.topics = data.topics;
-                        if (data.sponsors) this.app.state.sponsors = data.sponsors;
-                        if (data.userProfile) this.app.state.userProfile = data.userProfile;
+                        if (data.experts && this.app) this.app.experts = data.experts;
+                        if (data.topics && this.app) this.app.topics = data.topics;
+                        if (data.sponsors && this.app) this.app.sponsors = data.sponsors;
+                        if (data.userProfile && this.app) this.app.userProfile = data.userProfile;
                         
                         // 保存到本地存储
-                        this.app.saveExperts();
-                        this.app.saveTopics();
-                        this.app.saveSponsors();
-                        this.app.saveProfile();
+                        if (this.app.saveExperts) this.app.saveExperts();
+                        if (this.app.saveTopics) this.app.saveTopics();
+                        if (this.app.saveSponsors) this.app.saveSponsors();
+                        if (this.app.saveProfile) this.app.saveProfile();
                         
                         // 更新界面
-                        this.app.updateProfileSummary();
+                        if (this.app.updateProfilePreview) this.app.updateProfilePreview();
                         
                         // 重新加载当前页面
-                        this.app.navigateTo(this.app.state.currentPage);
+                        if (this.app.loadPage) {
+                            this.app.loadPage(this.app.currentPage || 'home');
+                        }
                         
                         alert('数据导入成功！');
                     }
@@ -231,13 +266,18 @@ class MedicalConferenceUtils {
     
     // 显示数据统计
     showDataStats() {
+        if (!this.app) {
+            alert('应用未初始化');
+            return;
+        }
+        
         const stats = `
             数据统计：
             
-            专家数量：${this.app.state.experts.length}
-            论坛话题：${this.app.state.topics.length}
-            赞助商数量：${this.app.state.sponsors.length}
-            用户资料：${this.app.state.userProfile ? '已设置' : '未设置'}
+            专家数量：${(this.app.experts || []).length}
+            论坛话题：${(this.app.topics || []).length}
+            赞助商数量：${(this.app.sponsors || []).length}
+            用户资料：${this.app.userProfile ? '已设置' : '未设置'}
             
             本地存储使用：${this.calculateStorageSize()}
         `;
@@ -292,6 +332,7 @@ class MedicalConferenceUtils {
         document.body.appendChild(backToTopBtn);
         
         // 显示/隐藏按钮
+        let scrollTimeoutId;
         window.addEventListener('scroll', () => {
             if (window.scrollY > 300) {
                 backToTopBtn.style.opacity = '1';
@@ -313,6 +354,8 @@ class MedicalConferenceUtils {
     
     // 添加搜索功能
     addSearchFunctionality() {
+        if (!this.app) return;
+        
         // 在首页添加搜索框
         const searchBox = document.createElement('div');
         searchBox.innerHTML = `
@@ -325,40 +368,43 @@ class MedicalConferenceUtils {
         `;
         
         // 在首页标题后插入搜索框
-        const homeHeader = document.querySelector('.home-header');
-        if (homeHeader) {
-            homeHeader.parentNode.insertBefore(searchBox, homeHeader.nextSibling);
+        const pageTitle = document.querySelector('.page-title');
+        if (pageTitle && pageTitle.parentNode) {
+            pageTitle.parentNode.insertBefore(searchBox, pageTitle.nextSibling);
             
             // 添加搜索功能
             const searchInput = document.getElementById('globalSearch');
-            searchInput.addEventListener('input', (e) => {
-                this.performSearch(e.target.value);
-            });
+            const self = this;
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    self.performSearch(e.target.value);
+                });
+            }
         }
     }
     
     // 执行搜索
     performSearch(query) {
-        if (!query.trim()) return;
+        if (!query.trim() || !this.app) return;
         
         // 搜索专家
-        const expertResults = this.app.state.experts.filter(expert => 
-            expert.name.includes(query) || 
-            expert.department.includes(query) || 
-            expert.hospital.includes(query)
+        const expertResults = (this.app.experts || []).filter(expert => 
+            (expert.name && expert.name.includes(query)) || 
+            (expert.department && expert.department.includes(query)) || 
+            (expert.hospital && expert.hospital.includes(query))
         );
         
         // 搜索话题
-        const topicResults = this.app.state.topics.filter(topic => 
-            topic.title.includes(query) || 
-            topic.content.includes(query) || 
-            topic.author.includes(query)
+        const topicResults = (this.app.topics || []).filter(topic => 
+            (topic.title && topic.title.includes(query)) || 
+            (topic.content && topic.content.includes(query)) || 
+            (topic.author && topic.author.includes(query))
         );
         
         // 搜索赞助商
-        const sponsorResults = this.app.state.sponsors.filter(sponsor => 
-            sponsor.name.includes(query) || 
-            sponsor.category.includes(query)
+        const sponsorResults = (this.app.sponsors || []).filter(sponsor => 
+            (sponsor.name && sponsor.name.includes(query)) || 
+            (sponsor.category && sponsor.category.includes(query))
         );
         
         // 显示搜索结果
@@ -367,6 +413,8 @@ class MedicalConferenceUtils {
     
     // 显示搜索结果
     showSearchResults(expertResults, topicResults, sponsorResults, query) {
+        if (!query) return;
+        
         const resultsHTML = `
             <div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
                 <h3 style="color: #333; margin-bottom: 20px;">搜索结果： "${query}"</h3>
@@ -378,10 +426,10 @@ class MedicalConferenceUtils {
                             ${expertResults.map(expert => `
                                 <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee; cursor: pointer;" data-id="${expert.id}" data-type="expert">
                                     <div style="display: flex; align-items: center; gap: 10px;">
-                                        <div style="width: 30px; height: 30px; border-radius: 50%; background: #0066cc; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">${expert.avatar}</div>
+                                        <div style="width: 30px; height: 30px; border-radius: 50%; background: #0066cc; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">${expert.avatar || '专'}</div>
                                         <div>
-                                            <div style="font-weight: 500; color: #333;">${expert.name}</div>
-                                            <div style="font-size: 12px; color: #666;">${expert.department}</div>
+                                            <div style="font-weight: 500; color: #333;">${expert.name || '未命名'}</div>
+                                            <div style="font-size: 12px; color: #666;">${expert.department || ''}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -395,10 +443,10 @@ class MedicalConferenceUtils {
                         <h4 style="color: #0066cc; margin-bottom: 10px;">论坛话题 (${topicResults.length})</h4>
                         ${topicResults.map(topic => `
                             <div style="background: white; padding: 15px; border-radius: 8px; border-left: 3px solid #0066cc; margin-bottom: 10px; cursor: pointer;" data-id="${topic.id}" data-type="topic">
-                                <div style="font-weight: 500; color: #333; margin-bottom: 5px;">${topic.title}</div>
+                                <div style="font-weight: 500; color: #333; margin-bottom: 5px;">${topic.title || '无标题'}</div>
                                 <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
-                                    <span>作者：${topic.author}</span>
-                                    <span>${topic.time}</span>
+                                    <span>作者：${topic.author || '匿名'}</span>
+                                    <span>${topic.time || ''}</span>
                                 </div>
                             </div>
                         `).join('')}
@@ -411,8 +459,8 @@ class MedicalConferenceUtils {
                         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 15px;">
                             ${sponsorResults.map(sponsor => `
                                 <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee; text-align: center; cursor: pointer;" data-id="${sponsor.id}" data-type="sponsor">
-                                    <div style="font-weight: bold; color: #0066cc; margin-bottom: 5px;">${sponsor.logo}</div>
-                                    <div style="font-size: 12px; color: #333;">${sponsor.name}</div>
+                                    <div style="font-weight: bold; color: #0066cc; margin-bottom: 5px;">${sponsor.logo || '企'}</div>
+                                    <div style="font-size: 12px; color: #333;">${sponsor.name || '未命名'}</div>
                                 </div>
                             `).join('')}
                         </div>
@@ -429,15 +477,18 @@ class MedicalConferenceUtils {
         `;
         
         // 替换首页内容显示搜索结果
-        const modulesContainer = document.querySelector('.modules-container');
+        const modulesContainer = document.querySelector('.home-modules');
         if (modulesContainer) {
-            modulesContainer.style.display = 'none';
-            
+            const parent = modulesContainer.parentNode;
             const searchResultsContainer = document.createElement('div');
             searchResultsContainer.id = 'searchResults';
             searchResultsContainer.innerHTML = resultsHTML;
             
-            modulesContainer.parentNode.insertBefore(searchResultsContainer, modulesContainer.nextSibling);
+            // 隐藏原始模块
+            modulesContainer.style.display = 'none';
+            
+            // 插入搜索结果
+            parent.insertBefore(searchResultsContainer, modulesContainer.nextSibling);
             
             // 添加搜索结果点击事件
             searchResultsContainer.querySelectorAll('[data-id]').forEach(item => {
@@ -445,29 +496,65 @@ class MedicalConferenceUtils {
                     const id = item.getAttribute('data-id');
                     const type = item.getAttribute('data-type');
                     
-                    if (type === 'expert') {
+                    if (type === 'expert' && this.app && this.app.showExpertDetail) {
                         this.app.showExpertDetail(parseInt(id));
-                    } else if (type === 'topic') {
-                        this.app.navigateTo('forum');
-                    } else if (type === 'sponsor') {
+                    } else if (type === 'topic' && this.app && this.app.loadPage) {
+                        this.app.loadPage('forum');
+                    } else if (type === 'sponsor' && this.app && this.app.showSponsorDetail) {
                         this.app.showSponsorDetail(parseInt(id));
                     }
                 });
             });
+            
+            // 添加搜索框清除功能
+            const searchInput = document.getElementById('globalSearch');
+            if (searchInput) {
+                const originalOnInput = searchInput.oninput;
+                searchInput.oninput = function(e) {
+                    if (e.target.value.trim() === '') {
+                        // 清空搜索，恢复原始内容
+                        modulesContainer.style.display = 'grid';
+                        if (searchResultsContainer.parentNode) {
+                            searchResultsContainer.parentNode.removeChild(searchResultsContainer);
+                        }
+                    }
+                    if (originalOnInput) {
+                        originalOnInput.call(this, e);
+                    }
+                };
+            }
         }
     }
 }
 
 // 初始化工具类
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.app) {
-        window.appUtils = new MedicalConferenceUtils(window.app);
-        
-        // 延迟添加搜索功能
-        setTimeout(() => {
-            if (window.app.state.currentPage === 'home') {
-                window.appUtils.addSearchFunctionality();
+    console.log('DOMContentLoaded - app.js开始初始化');
+    
+    // 等待app对象可用并完全初始化
+    const initAppUtils = () => {
+        if (window.app && window.app.currentPage && window.app.loadPage) {
+            console.log('window.app 已完全定义，创建 MedicalConferenceUtils');
+            try {
+                window.appUtils = new MedicalConferenceUtils(window.app);
+            } catch (error) {
+                console.error('MedicalConferenceUtils 初始化失败:', error);
             }
-        }, 1000);
-    }
+        } else {
+            console.log('window.app 未完全初始化，等待...');
+            // 等待200ms再试
+            if (window.appInitAttempts === undefined) {
+                window.appInitAttempts = 0;
+            }
+            if (window.appInitAttempts < 20) { // 最多等待4秒
+                window.appInitAttempts++;
+                setTimeout(initAppUtils, 200);
+            } else {
+                console.error('window.app 初始化超时');
+            }
+        }
+    };
+    
+    // 开始初始化
+    initAppUtils();
 });

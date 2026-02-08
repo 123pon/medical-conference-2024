@@ -8,37 +8,169 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-    <!-- 导航栏 -->
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="logo">
-                <i class="fas fa-heartbeat"></i>
-                <span>医学年会2024</span>
+    <!-- 顶部信息提示栏 -->
+    <div class="info-bar">
+        <div class="info-container">
+            <div class="info-message">
+                <i class="fas fa-bell"></i>
+                <span id="info-text">医学年会2024将于11月15-17日在北京举行</span>
             </div>
-            <div class="nav-menu">
-                <a href="#home" class="active"><i class="fas fa-home"></i> 首页</a>
-                <a href="#experts"><i class="fas fa-user-md"></i> 专家库</a>
-                <a href="#schedule"><i class="fas fa-calendar-alt"></i> 日程</a>
-                <a href="#gallery"><i class="fas fa-images"></i> 会议内容</a>
-                <a href="#forum"><i class="fas fa-comments"></i> 论坛</a>
-                <a href="#sponsors"><i class="fas fa-handshake"></i> 赞助商</a>
-                <a href="#profile"><i class="fas fa-id-card"></i> 我的名片</a>
+            <div class="info-actions">
+                <button id="close-info" class="info-btn">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
-            <button class="menu-toggle">
-                <i class="fas fa-bars"></i>
-            </button>
         </div>
-    </nav>
+    </div>
 
-    <!-- 主要内容区 -->
-    <main class="main-content">
-        <!-- 各页面内容会通过JavaScript动态加载 -->
-        <div id="page-content"></div>
-    </main>
+    <!-- 侧边栏遮罩层 -->
+    <div class="sidebar-overlay left"></div>
+    <div class="sidebar-overlay right"></div>
+
+    <!-- 移动端菜单切换按钮 -->
+    <div class="mobile-menu-buttons">
+        <button class="mobile-menu-toggle left-menu-toggle">
+            <i class="fas fa-bars"></i>
+        </button>
+        <button class="mobile-menu-toggle right-menu-toggle">
+            <i class="fas fa-user"></i>
+        </button>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="app-container">
+        <!-- 左侧可伸缩菜单 -->
+        <aside class="sidebar collapsed">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-heartbeat"></i>
+                    <span class="logo-text">医学年会</span>
+                </div>
+                <button class="sidebar-toggle" id="sidebar-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#home" class="nav-item active" data-page="home">
+                    <i class="fas fa-home"></i>
+                    <span class="nav-text">首页</span>
+                </a>
+                <a href="#experts" class="nav-item" data-page="experts">
+                    <i class="fas fa-user-md"></i>
+                    <span class="nav-text">专家库</span>
+                </a>
+                <a href="#schedule" class="nav-item" data-page="schedule">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span class="nav-text">会议日程</span>
+                </a>
+                <a href="#gallery" class="nav-item" data-page="gallery">
+                    <i class="fas fa-images"></i>
+                    <span class="nav-text">会议内容</span>
+                </a>
+                <a href="#forum" class="nav-item" data-page="forum">
+                    <i class="fas fa-comments"></i>
+                    <span class="nav-text">学术论坛</span>
+                </a>
+                <a href="#sponsors" class="nav-item" data-page="sponsors">
+                    <i class="fas fa-handshake"></i>
+                    <span class="nav-text">赞助商</span>
+                </a>
+                <a href="#profile" class="nav-item" data-page="profile">
+                    <i class="fas fa-id-card"></i>
+                    <span class="nav-text">我的名片</span>
+                </a>
+                <a href="#share" class="nav-item" data-page="share">
+                    <i class="fas fa-share-alt"></i>
+                    <span class="nav-text">分享会议</span>
+                </a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">医</div>
+                    <div class="user-details">
+                        <div class="user-name">参会专家</div>
+                        <div class="user-status">在线</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容区 -->
+        <main class="main-content">
+            <div id="page-content" class="page-content">
+                <!-- 页面内容将动态加载 -->
+            </div>
+            
+            <!-- 赞助商展示区（只在首页显示） -->
+            <div id="sponsor-section" class="sponsor-section">
+                <h3 class="section-title">感谢以下赞助商</h3>
+                <div class="sponsor-grid">
+                    <!-- 赞助商logo将动态加载 -->
+                </div>
+            </div>
+        </main>
+
+        <!-- 右侧个人信息菜单 -->
+        <aside class="right-sidebar collapsed">
+            <div class="right-sidebar-header">
+                <h3><i class="fas fa-user-cog"></i> 个人信息</h3>
+                <button class="right-sidebar-toggle" id="right-sidebar-toggle">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+            </div>
+            
+            <div class="profile-quick-view">
+                <div class="profile-avatar">医</div>
+                <div class="profile-info">
+                    <div class="profile-name">未设置</div>
+                    <div class="profile-title">点击编辑个人信息</div>
+                </div>
+            </div>
+            
+            <div class="right-sidebar-nav">
+                <a href="#edit-profile" class="right-nav-item" id="edit-profile-btn">
+                    <i class="fas fa-edit"></i>
+                    <span>编辑个人信息</span>
+                </a>
+                <a href="#my-card" class="right-nav-item" id="my-card-btn">
+                    <i class="fas fa-id-card"></i>
+                    <span>我的名片</span>
+                </a>
+                <a href="#my-schedule" class="right-nav-item">
+                    <i class="fas fa-calendar-check"></i>
+                    <span>我的日程</span>
+                </a>
+                <a href="#my-posts" class="right-nav-item">
+                    <i class="fas fa-comment-medical"></i>
+                    <span>我的发帖</span>
+                </a>
+                <a href="#settings" class="right-nav-item">
+                    <i class="fas fa-cog"></i>
+                    <span>设置</span>
+                </a>
+                <a href="#logout" class="right-nav-item">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>退出登录</span>
+                </a>
+            </div>
+            
+            <div class="right-sidebar-footer">
+                <div class="conference-info">
+                    <h4><i class="fas fa-info-circle"></i> 会议信息</h4>
+                    <p>时间：2024年11月15-17日</p>
+                    <p>地点：北京国际会议中心</p>
+                    <p>主题：创新医学，健康未来</p>
+                </div>
+            </div>
+        </aside>
+    </div>
 
     <!-- 底部 -->
     <footer class="footer">
-        <p>© 2024 医学年会 | 技术支持：组织名称</p>
+        <p>© 2024 医学年会 | 技术支持：医学年会组委会</p>
+        <p>联系方式：conference@medical.org | 电话：010-12345678</p>
     </footer>
 
     <!-- 加载JavaScript -->
