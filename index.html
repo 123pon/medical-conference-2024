@@ -4,6 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>医学年会2024</title>
+    <!-- 添加Supabase客户端 -->
+    <script type="module">
+  // 动态加载Supabase
+  import supabase from './js/supabase.js'
+  window.supabase = supabase
+    </script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -112,59 +118,104 @@
             </div>
         </main>
 
-        <!-- 右侧个人信息菜单 -->
-        <aside class="right-sidebar collapsed">
-            <div class="right-sidebar-header">
-                <h3><i class="fas fa-user-cog"></i> 个人信息</h3>
-                <button class="right-sidebar-toggle" id="right-sidebar-toggle">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
+<!-- 右侧个人信息菜单 -->
+<aside class="right-sidebar collapsed">
+    <div class="right-sidebar-header">
+        <h3><i class="fas fa-user-cog"></i> 个人信息</h3>
+        <button class="right-sidebar-toggle" id="right-sidebar-toggle">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+    </div>
+    
+    <!-- 登录/注册表单（未登录时显示） -->
+    <div id="auth-section" class="auth-section" style="display: none;">
+        <div class="auth-container">
+            <h4 style="margin-bottom: 15px; color: var(--text-dark);">登录 / 注册</h4>
+            
+            <div class="auth-tabs">
+                <button class="auth-tab active" data-tab="login">登录</button>
+                <button class="auth-tab" data-tab="register">注册</button>
             </div>
             
-            <div class="profile-quick-view">
-                <div class="profile-avatar">医</div>
-                <div class="profile-info">
-                    <div class="profile-name">未设置</div>
-                    <div class="profile-title">点击编辑个人信息</div>
+            <!-- 登录表单 -->
+            <form id="login-form" class="auth-form active">
+                <div class="form-group">
+                    <label for="login-email">邮箱</label>
+                    <input type="email" id="login-email" placeholder="请输入邮箱" required>
                 </div>
-            </div>
-            
-            <div class="right-sidebar-nav">
-                <a href="#edit-profile" class="right-nav-item" id="edit-profile-btn">
-                    <i class="fas fa-edit"></i>
-                    <span>编辑个人信息</span>
-                </a>
-                <a href="#my-card" class="right-nav-item" id="my-card-btn">
-                    <i class="fas fa-id-card"></i>
-                    <span>我的名片</span>
-                </a>
-                <a href="#my-schedule" class="right-nav-item">
-                    <i class="fas fa-calendar-check"></i>
-                    <span>我的日程</span>
-                </a>
-                <a href="#my-posts" class="right-nav-item">
-                    <i class="fas fa-comment-medical"></i>
-                    <span>我的发帖</span>
-                </a>
-                <a href="#settings" class="right-nav-item">
-                    <i class="fas fa-cog"></i>
-                    <span>设置</span>
-                </a>
-                <a href="#logout" class="right-nav-item">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>退出登录</span>
-                </a>
-            </div>
-            
-            <div class="right-sidebar-footer">
-                <div class="conference-info">
-                    <h4><i class="fas fa-info-circle"></i> 会议信息</h4>
-                    <p>时间：2024年11月15-17日</p>
-                    <p>地点：北京国际会议中心</p>
-                    <p>主题：创新医学，健康未来</p>
+                <div class="form-group">
+                    <label for="login-password">密码</label>
+                    <input type="password" id="login-password" placeholder="请输入密码" required>
                 </div>
+                <button type="submit" class="btn btn-primary">登录</button>
+            </form>
+            
+            <!-- 注册表单 -->
+            <form id="register-form" class="auth-form">
+                <div class="form-group">
+                    <label for="register-email">邮箱</label>
+                    <input type="email" id="register-email" placeholder="请输入邮箱" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-password">密码</label>
+                    <input type="password" id="register-password" placeholder="至少6位字符" required>
+                </div>
+                <div class="form-group">
+                    <label for="register-username">用户名</label>
+                    <input type="text" id="register-username" placeholder="显示名称" required>
+                </div>
+                <button type="submit" class="btn btn-primary">注册</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 用户信息（登录后显示） -->
+    <div id="user-section" class="user-section" style="display: none;">
+        <div class="profile-quick-view" id="user-profile-view">
+            <div class="profile-avatar" id="user-avatar">医</div>
+            <div class="profile-info">
+                <div class="profile-name" id="user-name">未登录</div>
+                <div class="profile-title" id="user-title">点击登录</div>
             </div>
-        </aside>
+        </div>
+        
+        <div class="right-sidebar-nav">
+            <a href="#edit-profile" class="right-nav-item" id="edit-profile-btn">
+                <i class="fas fa-edit"></i>
+                <span>编辑个人信息</span>
+            </a>
+            <a href="#my-card" class="right-nav-item" id="my-card-btn">
+                <i class="fas fa-id-card"></i>
+                <span>我的名片</span>
+            </a>
+            <a href="#my-schedule" class="right-nav-item" id="my-schedule-btn">
+                <i class="fas fa-calendar-check"></i>
+                <span>我的日程</span>
+            </a>
+            <a href="#my-posts" class="right-nav-item" id="my-posts-btn">
+                <i class="fas fa-comment-medical"></i>
+                <span>我的发帖</span>
+            </a>
+            <a href="#settings" class="right-nav-item">
+                <i class="fas fa-cog"></i>
+                <span>设置</span>
+            </a>
+            <a href="#logout" class="right-nav-item" id="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>退出登录</span>
+            </a>
+        </div>
+        
+        <div class="right-sidebar-footer">
+            <div class="conference-info">
+                <h4><i class="fas fa-info-circle"></i> 会议信息</h4>
+                <p>时间：2024年11月15-17日</p>
+                <p>地点：北京国际会议中心</p>
+                <p>主题：创新医学，健康未来</p>
+            </div>
+        </div>
+    </div>
+</aside>
     </div>
 
     <!-- 底部 -->

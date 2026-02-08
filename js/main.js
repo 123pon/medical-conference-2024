@@ -5,35 +5,226 @@ const AppState = {
     topics: [],
     userProfile: null,
     sponsors: [],
-    sidebarCollapsed: true, // 默认收起
-    rightSidebarCollapsed: true, // 默认收起
+    sidebarCollapsed: true,
+    rightSidebarCollapsed: true,
+    currentUser: null,
+    supabase: null,
     
-    init() {
+    async init() {
         console.log('AppState.init()');
-        this.loadExperts();
-        this.loadTopics();
-        this.loadProfile();
-        this.loadSponsors();
+        
+        // 初始化 Supabase 客户端
+        await this.initSupabase();
+        
+        // 检查认证状态
+        await this.checkAuth();
+        
+        // 加载数据
+        await Promise.all([
+            this.loadExperts(),
+            this.loadTopics(),
+            this.loadSponsors()
+        ]);
+        
         this.setupEventListeners();
         this.loadPage('home');
         this.updateProfilePreview();
         
-        // 应用默认收起状态（桌面端需要特殊处理）
+        // 应用默认收起状态
         this.applyDefaultCollapsedState();
         
         // 设置移动端按钮事件
         this.setupMobileMenuButtons();
     },
     
+    async initSupabase() {
+        try {
+            // 动态导入 Supabase
+            const supabaseModule = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+            const { createClient } = supabaseModule;
+            
+            // 从环境变量或默认值获取配置
+            const supabaseUrl = window.SUPABASE_URL || 'https://your-project.supabase.co';
+            const supabaseKey = window.SUPABASE_ANON_KEY || 'your-anon-key';
+            
+            this.supabase = createClient(supabaseUrl, supabaseKey);
+            window.supabase = this.supabase; // 暴露到全局
+            
+            console.log('Supabase 客户端初始化成功');
+        } catch (error) {
+            console.error('初始化 Supabase 失败:', error);
+            // 使用后备方案：创建虚拟 Supabase 客户端
+            this.supabase = this.createMockSupabase();
+        }
+    },
+    
+    createMockSupabase() {
+        // 创建虚拟 Supabase 客户端作为后备
+        return {
+            auth: {
+                getSession: async () => ({ data: { session: null }, error: null }),
+                onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+                signInWithPassword: async () => ({ data: null, error: { message: 'Supabase 未配置' } }),
+                signUp: async () => ({ data: null, error: { message: 'Supabase 未配置' } }),
+                signOut: async () => ({ error: null })
+            },
+            from: () => ({
+                select: () => ({ eq: () => ({ single: async () => ({ data: null, error: null }) }) }),
+                insert: () => ({ select: () => ({ single: async () => ({ data: null, error: null }) }) }),
+                update: () => ({ eq: () => ({ select: () => ({ single: async () => ({ data: null, error: null }) }) }) }),
+                delete: () => ({ eq: async () => ({ error: null }) })
+            })
+        };
+    },
+    
+    async checkAuth() {
+        if (!this.supabase) return;
+        
+        try {
+            const { data: { session }, error } = await this.supabase.auth.getSession();
+            
+            if (error) {
+                console.error('获取会话失败:', error);
+                return;
+            }
+            
+            if (session?.user) {
+                this.currentUser = session.user;
+                await this.loadUserProfileFromSupabase();
+            }
+            
+            // 监听认证状态变化
+            this.supabase.auth.onAuthStateChange(async (event, session) => {
+                if (event === 'SIGNED_IN' && session?.user) {
+                    this.currentUser = session.user;
+                    await this.loadUserProfileFromSupabase();
+                    this.updateProfilePreview();
+                    this.showNotification('登录成功', 'success');
+                } else if (event === 'SIGNED_OUT') {
+                    this.currentUser = null;
+                    this.userProfile = null;
+                    this.updateProfilePreview();
+                    this.showNotification('已退出登录', 'info');
+                }
+            });
+        } catch (error) {
+            console.error('检查认证状态异常:', error);
+        }
+    },
+    
+    async loadUserProfileFromSupabase() {
+        if (!this.currentUser || !this.supabase) return;
+        
+        try {
+            const { data, error } = await this.supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', this.currentUser.id)
+                .single();
+            
+            if (error) {
+                console.error('从 Supabase 加载用户资料失败:', error);
+                
+                // 如果没有找到用户资料，创建一个默认的
+                if (error.code === 'PGRST116') {
+                    await this.createUserProfileInSupabase();
+                } else {
+                    // 尝试从本地加载
+                    this.loadProfileFromLocal();
+                }
+                return;
+            }
+            
+            this.userProfile = data;
+            
+            // 同步到本地存储作为缓存
+            localStorage.setItem('conference_profile', JSON.stringify(data));
+        } catch (error) {
+            console.error('加载用户资料异常:', error);
+            this.loadProfileFromLocal();
+        }
+    },
+    
+    async createUserProfileInSupabase() {
+        if (!this.currentUser || !this.supabase) return;
+        
+        const profileData = {
+            id: this.currentUser.id,
+            username: this.currentUser.email.split('@')[0],
+            full_name: this.currentUser.email.split('@')[0],
+            title: '参会医生',
+            department: '未设置',
+            hospital: '未设置',
+            bio: '暂无个人简介',
+            avatar: this.currentUser.email.charAt(0).toUpperCase(),
+            contact: '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        };
+        
+        try {
+            const { data, error } = await this.supabase
+                .from('profiles')
+                .insert([profileData])
+                .select()
+                .single();
+            
+            if (error) {
+                console.error('创建用户资料失败:', error);
+                return;
+            }
+            
+            this.userProfile = data;
+            localStorage.setItem('conference_profile', JSON.stringify(data));
+        } catch (error) {
+            console.error('创建用户资料异常:', error);
+        }
+    },
+    
+    loadProfileFromLocal() {
+        const savedProfile = localStorage.getItem('conference_profile');
+        if (savedProfile) {
+            this.userProfile = JSON.parse(savedProfile);
+        }
+    },
+    
+    async saveProfileToSupabase(profileData) {
+        if (!this.currentUser || !this.supabase) return false;
+        
+        try {
+            const profileToSave = {
+                ...profileData,
+                id: this.currentUser.id,
+                updated_at: new Date().toISOString()
+            };
+            
+            const { data, error } = await this.supabase
+                .from('profiles')
+                .upsert([profileToSave])
+                .select()
+                .single();
+            
+            if (error) {
+                console.error('保存用户资料到 Supabase 失败:', error);
+                return false;
+            }
+            
+            this.userProfile = data;
+            localStorage.setItem('conference_profile', JSON.stringify(data));
+            return true;
+        } catch (error) {
+            console.error('保存用户资料异常:', error);
+            return false;
+        }
+    },
+    
     applyDefaultCollapsedState() {
-        // 在桌面端，我们需要应用collapsed类，但在移动端，侧边栏默认是隐藏的
         if (window.innerWidth > 1024) {
             const sidebar = document.querySelector('.sidebar');
             const rightSidebar = document.querySelector('.right-sidebar');
             
             if (this.sidebarCollapsed && sidebar) {
                 sidebar.classList.add('collapsed');
-                // 更新按钮图标
                 const toggleBtn = document.getElementById('sidebar-toggle');
                 if (toggleBtn) {
                     toggleBtn.innerHTML = '<i class="fas fa-bars"></i>';
@@ -42,14 +233,12 @@ const AppState = {
             
             if (this.rightSidebarCollapsed && rightSidebar) {
                 rightSidebar.classList.add('collapsed');
-                // 更新按钮图标
                 const toggleBtn = document.getElementById('right-sidebar-toggle');
                 if (toggleBtn) {
                     toggleBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
                 }
             }
         } else {
-            // 移动端：确保侧边栏是隐藏的
             const sidebar = document.querySelector('.sidebar');
             const rightSidebar = document.querySelector('.right-sidebar');
             
@@ -78,7 +267,6 @@ const AppState = {
             });
         }
         
-        // 点击遮罩层关闭侧边栏
         const overlays = document.querySelectorAll('.sidebar-overlay');
         overlays.forEach(overlay => {
             overlay.addEventListener('click', () => {
@@ -89,25 +277,22 @@ const AppState = {
     
     setupEventListeners() {
         console.log('AppState.setupEventListeners()');
-        // 左侧菜单点击事件
+        
         document.querySelectorAll('.nav-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 const page = item.getAttribute('data-page');
                 this.loadPage(page);
                 
-                // 更新活动状态
                 document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
                 
-                // 移动端点击菜单后自动关闭侧边栏
                 if (window.innerWidth <= 1024) {
                     this.closeAllSidebars();
                 }
             });
         });
         
-        // 左侧菜单伸缩按钮
         const sidebarToggle = document.getElementById('sidebar-toggle');
         if (sidebarToggle) {
             sidebarToggle.addEventListener('click', () => {
@@ -115,7 +300,6 @@ const AppState = {
             });
         }
         
-        // 右侧菜单伸缩按钮
         const rightSidebarToggle = document.getElementById('right-sidebar-toggle');
         if (rightSidebarToggle) {
             rightSidebarToggle.addEventListener('click', () => {
@@ -123,7 +307,6 @@ const AppState = {
             });
         }
         
-        // 右侧菜单项点击事件
         document.getElementById('edit-profile-btn')?.addEventListener('click', (e) => {
             e.preventDefault();
             this.loadPage('profile');
@@ -140,12 +323,10 @@ const AppState = {
             }
         });
         
-        // 关闭信息提示栏
         document.getElementById('close-info')?.addEventListener('click', () => {
             document.querySelector('.info-bar').style.display = 'none';
         });
         
-        // 个人信息快速查看点击事件
         document.querySelector('.profile-quick-view')?.addEventListener('click', () => {
             this.loadPage('profile');
             if (window.innerWidth <= 1024) {
@@ -153,7 +334,6 @@ const AppState = {
             }
         });
         
-        // 点击主内容区域关闭侧边栏（移动端）
         document.addEventListener('click', (e) => {
             if (window.innerWidth <= 1024) {
                 const isSidebar = e.target.closest('.sidebar') || e.target.closest('.right-sidebar');
@@ -175,14 +355,12 @@ const AppState = {
         this.sidebarCollapsed = !this.sidebarCollapsed;
         
         if (window.innerWidth <= 1024) {
-            // 移动端：切换显示/隐藏
             if (this.sidebarCollapsed) {
                 sidebar.classList.add('collapsed');
                 if (overlay) overlay.classList.remove('active');
             } else {
                 sidebar.classList.remove('collapsed');
                 if (overlay) overlay.classList.add('active');
-                // 确保其他侧边栏关闭
                 this.rightSidebarCollapsed = true;
                 const rightSidebar = document.querySelector('.right-sidebar');
                 const rightOverlay = document.querySelector('.sidebar-overlay.right');
@@ -190,7 +368,6 @@ const AppState = {
                 if (rightOverlay) rightOverlay.classList.remove('active');
             }
         } else {
-            // 桌面端：切换收起/展开
             if (this.sidebarCollapsed) {
                 sidebar.classList.add('collapsed');
             } else {
@@ -198,7 +375,6 @@ const AppState = {
             }
         }
         
-        // 更新按钮图标
         const toggleBtn = document.getElementById('sidebar-toggle');
         if (toggleBtn) {
             if (window.innerWidth > 1024) {
@@ -218,14 +394,12 @@ const AppState = {
         this.rightSidebarCollapsed = !this.rightSidebarCollapsed;
         
         if (window.innerWidth <= 1024) {
-            // 移动端：切换显示/隐藏
             if (this.rightSidebarCollapsed) {
                 rightSidebar.classList.add('collapsed');
                 if (overlay) overlay.classList.remove('active');
             } else {
                 rightSidebar.classList.remove('collapsed');
                 if (overlay) overlay.classList.add('active');
-                // 确保其他侧边栏关闭
                 this.sidebarCollapsed = true;
                 const sidebar = document.querySelector('.sidebar');
                 const leftOverlay = document.querySelector('.sidebar-overlay.left');
@@ -233,7 +407,6 @@ const AppState = {
                 if (leftOverlay) leftOverlay.classList.remove('active');
             }
         } else {
-            // 桌面端：切换收起/展开
             if (this.rightSidebarCollapsed) {
                 rightSidebar.classList.add('collapsed');
             } else {
@@ -241,7 +414,6 @@ const AppState = {
             }
         }
         
-        // 更新按钮图标
         const toggleBtn = document.getElementById('right-sidebar-toggle');
         if (toggleBtn) {
             if (window.innerWidth > 1024) {
@@ -254,14 +426,12 @@ const AppState = {
     
     closeAllSidebars() {
         if (window.innerWidth <= 1024) {
-            // 关闭左侧侧边栏
             this.sidebarCollapsed = true;
             const sidebar = document.querySelector('.sidebar');
             const leftOverlay = document.querySelector('.sidebar-overlay.left');
             if (sidebar) sidebar.classList.add('collapsed');
             if (leftOverlay) leftOverlay.classList.remove('active');
             
-            // 关闭右侧侧边栏
             this.rightSidebarCollapsed = true;
             const rightSidebar = document.querySelector('.right-sidebar');
             const rightOverlay = document.querySelector('.sidebar-overlay.right');
@@ -274,85 +444,335 @@ const AppState = {
         this.toggleSidebar();
     },
     
-    // ... 其余代码保持不变（从原文件复制） ...
-    // 注意：这里需要包含所有原有的方法，包括：
-    // updateProfilePreview(), loadPage(), renderHome(), setupHomeEvents()等
-    // 为了简洁，我只展示了需要修改的部分，您需要将原文件中的其他方法复制过来
+    async loadExperts() {
+        try {
+            if (this.supabase) {
+                // 尝试从 Supabase 加载
+                const { data, error } = await this.supabase
+                    .from('experts')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (!error && data) {
+                    this.experts = data;
+                    // 同步到本地存储作为缓存
+                    localStorage.setItem('conference_experts', JSON.stringify(data));
+                    return;
+                }
+            }
+            
+            // 如果 Supabase 加载失败，使用本地缓存
+            this.loadExpertsFromLocal();
+        } catch (error) {
+            console.error('加载专家数据异常:', error);
+            this.loadExpertsFromLocal();
+        }
+    },
     
-    // 以下是原文件中的其他方法，需要保留：
-    loadExperts() {
+    loadExpertsFromLocal() {
         const savedExperts = localStorage.getItem('conference_experts');
         if (savedExperts) {
             this.experts = JSON.parse(savedExperts);
         } else {
-            this.experts = [
-                { id: 1, name: '张医生', title: '主任医师', department: '心内科', hospital: '协和医院', avatar: '张', bio: '专注心血管疾病研究20余年' },
-                { id: 2, name: '李医生', title: '副主任医师', department: '神经外科', hospital: '北医三院', avatar: '李', bio: '神经外科微创手术专家' }
-            ];
-            this.saveExperts();
+            this.experts = this.getDefaultExperts();
+            this.saveExpertsToLocal();
         }
     },
-
-    loadTopics() {
+    
+    getDefaultExperts() {
+        return [
+            { 
+                id: 1, 
+                name: '张医生', 
+                title: '主任医师', 
+                department: '心内科', 
+                hospital: '协和医院', 
+                avatar: '张', 
+                bio: '专注心血管疾病研究20余年',
+                created_at: new Date().toISOString(),
+                user_id: null
+            },
+            { 
+                id: 2, 
+                name: '李医生', 
+                title: '副主任医师', 
+                department: '神经外科', 
+                hospital: '北医三院', 
+                avatar: '李', 
+                bio: '神经外科微创手术专家',
+                created_at: new Date().toISOString(),
+                user_id: null
+            }
+        ];
+    },
+    
+    async saveExpert(expert) {
+        try {
+            if (this.supabase && this.currentUser) {
+                // 保存到 Supabase
+                const expertToSave = {
+                    ...expert,
+                    user_id: this.currentUser.id,
+                    updated_at: new Date().toISOString()
+                };
+                
+                if (expert.id) {
+                    // 更新现有专家
+                    const { data, error } = await this.supabase
+                        .from('experts')
+                        .update(expertToSave)
+                        .eq('id', expert.id)
+                        .eq('user_id', this.currentUser.id)
+                        .select()
+                        .single();
+                    
+                    if (error) throw error;
+                    expert = data;
+                } else {
+                    // 创建新专家
+                    expertToSave.created_at = new Date().toISOString();
+                    const { data, error } = await this.supabase
+                        .from('experts')
+                        .insert([expertToSave])
+                        .select()
+                        .single();
+                    
+                    if (error) throw error;
+                    expert = data;
+                }
+            }
+            
+            // 更新本地数组和存储
+            this.updateLocalExpert(expert);
+            return expert;
+        } catch (error) {
+            console.error('保存专家失败:', error);
+            // 如果 Supabase 保存失败，只保存到本地
+            this.updateLocalExpert(expert);
+            return expert;
+        }
+    },
+    
+    updateLocalExpert(expert) {
+        if (!expert.id) {
+            expert.id = Date.now();
+        }
+        
+        const existingIndex = this.experts.findIndex(e => e.id === expert.id);
+        if (existingIndex >= 0) {
+            this.experts[existingIndex] = expert;
+        } else {
+            this.experts.push(expert);
+        }
+        
+        this.saveExpertsToLocal();
+    },
+    
+    saveExpertsToLocal() {
+        localStorage.setItem('conference_experts', JSON.stringify(this.experts));
+    },
+    
+    async deleteExpert(id) {
+        try {
+            if (this.supabase && this.currentUser) {
+                const { error } = await this.supabase
+                    .from('experts')
+                    .delete()
+                    .eq('id', id)
+                    .eq('user_id', this.currentUser.id);
+                
+                if (error) throw error;
+            }
+            
+            // 从本地数组中移除
+            this.experts = this.experts.filter(e => e.id !== id);
+            this.saveExpertsToLocal();
+            
+            return true;
+        } catch (error) {
+            console.error('删除专家失败:', error);
+            return false;
+        }
+    },
+    
+    async loadTopics() {
+        try {
+            if (this.supabase) {
+                // 尝试从 Supabase 加载
+                const { data, error } = await this.supabase
+                    .from('topics')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (!error && data) {
+                    this.topics = data.map(topic => ({
+                        ...topic,
+                        replies: topic.replies || []
+                    }));
+                    localStorage.setItem('conference_topics', JSON.stringify(this.topics));
+                    return;
+                }
+            }
+            
+            // 如果 Supabase 加载失败，使用本地缓存
+            this.loadTopicsFromLocal();
+        } catch (error) {
+            console.error('加载话题数据异常:', error);
+            this.loadTopicsFromLocal();
+        }
+    },
+    
+    loadTopicsFromLocal() {
         const savedTopics = localStorage.getItem('conference_topics');
         if (savedTopics) {
             this.topics = JSON.parse(savedTopics);
         } else {
             this.topics = [];
-            this.saveTopics();
+            this.saveTopicsToLocal();
         }
     },
-
-    loadProfile() {
-        const savedProfile = localStorage.getItem('conference_profile');
-        if (savedProfile) {
-            this.userProfile = JSON.parse(savedProfile);
+    
+    async saveTopic(topic) {
+        try {
+            if (this.supabase && this.currentUser) {
+                const topicToSave = {
+                    ...topic,
+                    author_id: this.currentUser.id,
+                    author_name: this.userProfile?.full_name || this.currentUser.email,
+                    updated_at: new Date().toISOString()
+                };
+                
+                if (topic.id) {
+                    const { data, error } = await this.supabase
+                        .from('topics')
+                        .update(topicToSave)
+                        .eq('id', topic.id)
+                        .eq('author_id', this.currentUser.id)
+                        .select()
+                        .single();
+                    
+                    if (error) throw error;
+                    topic = data;
+                } else {
+                    topicToSave.created_at = new Date().toISOString();
+                    const { data, error } = await this.supabase
+                        .from('topics')
+                        .insert([topicToSave])
+                        .select()
+                        .single();
+                    
+                    if (error) throw error;
+                    topic = data;
+                }
+            }
+            
+            this.updateLocalTopic(topic);
+            return topic;
+        } catch (error) {
+            console.error('保存话题失败:', error);
+            this.updateLocalTopic(topic);
+            return topic;
         }
     },
-
-    saveExperts() {
-        localStorage.setItem('conference_experts', JSON.stringify(this.experts));
+    
+    updateLocalTopic(topic) {
+        if (!topic.id) {
+            topic.id = Date.now();
+        }
+        
+        const existingIndex = this.topics.findIndex(t => t.id === topic.id);
+        if (existingIndex >= 0) {
+            this.topics[existingIndex] = topic;
+        } else {
+            this.topics.unshift(topic);
+        }
+        
+        this.saveTopicsToLocal();
     },
-
-    saveTopics() {
+    
+    saveTopicsToLocal() {
         localStorage.setItem('conference_topics', JSON.stringify(this.topics));
     },
-
-    saveProfile() {
-        if (this.userProfile) {
-            localStorage.setItem('conference_profile', JSON.stringify(this.userProfile));
+    
+    async addReplyToTopic(topicId, reply) {
+        try {
+            if (this.supabase && this.currentUser) {
+                const replyToSave = {
+                    topic_id: topicId,
+                    content: reply.content,
+                    author_id: this.currentUser.id,
+                    author_name: this.userProfile?.full_name || this.currentUser.email,
+                    created_at: new Date().toISOString()
+                };
+                
+                const { data, error } = await this.supabase
+                    .from('replies')
+                    .insert([replyToSave])
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                reply = data;
+            }
+            
+            // 更新本地数据
+            const topic = this.topics.find(t => t.id === topicId);
+            if (topic) {
+                if (!topic.replies) topic.replies = [];
+                topic.replies.push({
+                    ...reply,
+                    id: reply.id || Date.now(),
+                    time: new Date().toLocaleString('zh-CN')
+                });
+                this.saveTopicsToLocal();
+            }
+            
+            return reply;
+        } catch (error) {
+            console.error('添加回复失败:', error);
+            return null;
         }
     },
-
+    
     loadSponsors() {
         const savedSponsors = localStorage.getItem('conference_sponsors');
         if (savedSponsors) {
             this.sponsors = JSON.parse(savedSponsors);
         } else {
-            this.sponsors = [
-                { id: 1, name: '辉瑞制药', logo: '辉瑞', category: '药品' },
-                { id: 2, name: '罗氏诊断', logo: '罗氏', category: '诊断' },
-                { id: 3, name: '强生医疗', logo: '强生', category: '器械' },
-                { id: 4, name: '美敦力', logo: '美敦力', category: '器械' },
-                { id: 5, name: '西门子医疗', logo: '西门子', category: '设备' },
-                { id: 6, name: 'GE医疗', logo: 'GE', category: '设备' },
-                { id: 7, name: '飞利浦医疗', logo: '飞利浦', category: '设备' },
-                { id: 8, name: '迈瑞医疗', logo: '迈瑞', category: '设备' },
-                { id: 9, name: '拜耳医药', logo: '拜耳', category: '药品' },
-                { id: 10, name: '雅培诊断', logo: '雅培', category: '诊断' },
-                { id: 11, name: '波士顿科学', logo: '波士顿', category: '器械' },
-                { id: 12, name: '赛诺菲', logo: '赛诺菲', category: '药品' },
-                { id: 13, name: '阿斯利康', logo: 'AZ', category: '药品' },
-                { id: 14, name: '诺华制药', logo: '诺华', category: '药品' },
-                { id: 15, name: '默沙东', logo: '默沙东', category: '药品' },
-                { id: 16, name: '武田药品', logo: '武田', category: '药品' }
-            ];
-            this.saveSponsors();
+            this.sponsors = this.getDefaultSponsors();
+            this.saveSponsorsToLocal();
         }
     },
     
-    saveSponsors() {
+    getDefaultSponsors() {
+        return [
+            { id: 1, name: '辉瑞制药', logo: '辉瑞', category: '药品' },
+            { id: 2, name: '罗氏诊断', logo: '罗氏', category: '诊断' },
+            { id: 3, name: '强生医疗', logo: '强生', category: '器械' },
+            { id: 4, name: '美敦力', logo: '美敦力', category: '器械' },
+            { id: 5, name: '西门子医疗', logo: '西门子', category: '设备' },
+            { id: 6, name: 'GE医疗', logo: 'GE', category: '设备' },
+            { id: 7, name: '飞利浦医疗', logo: '飞利浦', category: '设备' },
+            { id: 8, name: '迈瑞医疗', logo: '迈瑞', category: '设备' },
+            { id: 9, name: '拜耳医药', logo: '拜耳', category: '药品' },
+            { id: 10, name: '雅培诊断', logo: '雅培', category: '诊断' },
+            { id: 11, name: '波士顿科学', logo: '波士顿', category: '器械' },
+            { id: 12, name: '赛诺菲', logo: '赛诺菲', category: '药品' },
+            { id: 13, name: '阿斯利康', logo: 'AZ', category: '药品' },
+            { id: 14, name: '诺华制药', logo: '诺华', category: '药品' },
+            { id: 15, name: '默沙东', logo: '默沙东', category: '药品' },
+            { id: 16, name: '武田药品', logo: '武田', category: '药品' }
+        ];
+    },
+    
+    saveSponsorsToLocal() {
         localStorage.setItem('conference_sponsors', JSON.stringify(this.sponsors));
+    },
+    
+    saveProfile() {
+        if (this.userProfile) {
+            localStorage.setItem('conference_profile', JSON.stringify(this.userProfile));
+        }
     },
     
     updateProfilePreview() {
@@ -360,14 +780,24 @@ const AppState = {
             const profileAvatar = document.querySelector('.profile-avatar');
             const profileName = document.querySelector('.profile-name');
             const profileTitle = document.querySelector('.profile-title');
-            
-            if (profileAvatar) profileAvatar.textContent = this.userProfile.name.charAt(0) || '医';
-            if (profileName) profileName.textContent = this.userProfile.name || '未设置';
-            if (profileTitle) profileTitle.textContent = this.userProfile.title || '点击编辑个人信息';
-            
-            // 更新左侧用户信息
+            const userAvatar = document.querySelector('.user-avatar');
             const userName = document.querySelector('.user-name');
-            if (userName) userName.textContent = this.userProfile.name || '参会专家';
+            
+            if (profileAvatar) profileAvatar.textContent = this.userProfile.avatar || 
+                (this.userProfile.full_name?.charAt(0) || '医');
+            if (profileName) profileName.textContent = this.userProfile.full_name || '未设置';
+            if (profileTitle) profileTitle.textContent = this.userProfile.title || '点击编辑个人信息';
+            if (userAvatar) userAvatar.textContent = this.userProfile.avatar || 
+                (this.userProfile.full_name?.charAt(0) || '医');
+            if (userName) userName.textContent = this.userProfile.full_name || '参会专家';
+        } else {
+            const profileName = document.querySelector('.profile-name');
+            const profileTitle = document.querySelector('.profile-title');
+            const userName = document.querySelector('.user-name');
+            
+            if (profileName) profileName.textContent = '未登录';
+            if (profileTitle) profileTitle.textContent = '点击登录';
+            if (userName) userName.textContent = '参会专家';
         }
     },
     
@@ -380,7 +810,6 @@ const AppState = {
             return;
         }
         
-        // 显示或隐藏赞助商区域
         const sponsorSection = document.getElementById('sponsor-section');
         if (sponsorSection) {
             sponsorSection.style.display = page === 'home' ? 'block' : 'none';
@@ -420,7 +849,6 @@ const AppState = {
                 this.setupHomeEvents();
         }
         
-        // 如果是首页，加载赞助商logo
         if (page === 'home') {
             this.renderSponsorLogos();
         }
@@ -437,7 +865,6 @@ const AppState = {
                 </p>
                 
                 <div class="home-modules">
-                    <!-- 第一行：4个模块 -->
                     <div class="home-module" data-page="experts" onclick="AppState.loadPage('experts')">
                         <div class="home-module-icon">
                             <i class="fas fa-user-md"></i>
@@ -470,7 +897,6 @@ const AppState = {
                         <p class="home-module-desc">浏览学术海报、会议照片和资料下载</p>
                     </div>
                     
-                    <!-- 第二行：4个模块 -->
                     <div class="home-module" data-page="forum" onclick="AppState.loadPage('forum')">
                         <div class="home-module-icon">
                             <i class="fas fa-comments"></i>
@@ -504,96 +930,20 @@ const AppState = {
                     </div>
                 </div>
                 
-                <!-- 赞助商展示区域 -->
                 <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
                     <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
                         <i class="fas fa-handshake"></i> 战略合作伙伴
                     </h3>
                     
                     <div class="sponsors-grid">
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(1)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #ffe6e6, #ffcccc); color: #cc0000;">
-                                辉瑞
+                        ${this.sponsors.slice(0, 12).map(sponsor => `
+                            <div class="sponsor-item" onclick="AppState.showSponsorDetail(${sponsor.id})">
+                                <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #ffe6e6, #ffcccc); color: #cc0000;">
+                                    ${sponsor.logo}
+                                </div>
+                                <div class="sponsor-name">${sponsor.name}</div>
                             </div>
-                            <div class="sponsor-name">辉瑞制药</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(2)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #e6f2ff, #cce0ff); color: #0066cc;">
-                                罗氏
-                            </div>
-                            <div class="sponsor-name">罗氏诊断</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(3)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #e6ffe6, #ccffcc); color: #009900;">
-                                强生
-                            </div>
-                            <div class="sponsor-name">强生医疗</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(4)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #fff0e6, #ffd9b3); color: #ff6600;">
-                                美敦力
-                            </div>
-                            <div class="sponsor-name">美敦力</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(5)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #f0f0f0, #e0e0e0); color: #333333;">
-                                西门子
-                            </div>
-                            <div class="sponsor-name">西门子医疗</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(6)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #e6f7ff, #b3e0ff); color: #0086b3;">
-                                GE
-                            </div>
-                            <div class="sponsor-name">GE医疗</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(7)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #fffae6, #fff0b3); color: #cc9900;">
-                                飞利浦
-                            </div>
-                            <div class="sponsor-name">飞利浦医疗</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(8)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #e6fffb, #b3fff0); color: #00cc99;">
-                                迈瑞
-                            </div>
-                            <div class="sponsor-name">迈瑞医疗</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(9)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #f9e6ff, #e6b3ff); color: #9900cc;">
-                                拜耳
-                            </div>
-                            <div class="sponsor-name">拜耳医药</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(10)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #ffe6f2, #ffb3d9); color: #cc0066;">
-                                雅培
-                            </div>
-                            <div class="sponsor-name">雅培诊断</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(11)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #e6ffe6, #b3ffb3); color: #009900;">
-                                波士顿科学
-                            </div>
-                            <div class="sponsor-name">波士顿科学</div>
-                        </div>
-                        
-                        <div class="sponsor-item" onclick="AppState.showSponsorDetail(12)">
-                            <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #e6f2ff, #b3d9ff); color: #0066cc;">
-                                赛诺菲
-                            </div>
-                            <div class="sponsor-name">赛诺菲</div>
-                        </div>
+                        `).join('')}
                     </div>
                 </div>
             </div>
@@ -601,7 +951,6 @@ const AppState = {
     },
     
     setupHomeEvents() {
-        // 主页模块点击事件
         const homeItems = Array.from(document.querySelectorAll('.home-module'));
         homeItems.forEach(item => {
             item.addEventListener('click', () => {
@@ -609,7 +958,6 @@ const AppState = {
                 if (!page) return;
                 this.loadPage(page);
 
-                // 更新左侧菜单活动状态
                 document.querySelectorAll('.nav-item').forEach(navItem => {
                     navItem.classList.remove('active');
                     if (navItem.getAttribute('data-page') === page) {
@@ -634,7 +982,6 @@ const AppState = {
             </div>
         `).join('');
         
-        // 添加赞助商logo点击事件
         document.querySelectorAll('.sponsor-logo').forEach(logo => {
             logo.addEventListener('click', () => {
                 const sponsorId = logo.getAttribute('data-id');
@@ -792,8 +1139,8 @@ const AppState = {
                             <h4 style="color: #333; margin-bottom: 10px;">${topic.title}</h4>
                             <p style="color: #555; margin-bottom: 10px;">${topic.content}</p>
                             <div style="display: flex; justify-content: space-between; font-size: 0.9rem; color: #666; margin-bottom: 15px;">
-                                <span>作者：${topic.author}</span>
-                                <span>${topic.time}</span>
+                                <span>作者：${topic.author_name || topic.author}</span>
+                                <span>${new Date(topic.created_at).toLocaleString('zh-CN')}</span>
                             </div>
                             
                             ${topic.replies && topic.replies.length > 0 ? `
@@ -801,7 +1148,7 @@ const AppState = {
                                     <h5 style="color: #666; margin-bottom: 10px;">回复 (${topic.replies.length})</h5>
                                     ${topic.replies.map(reply => `
                                         <div style="border-bottom: 1px solid #eee; padding: 8px 0;">
-                                            <div style="color: #666; font-size: 0.9rem;"><strong>${reply.author}</strong> - ${reply.time}</div>
+                                            <div style="color: #666; font-size: 0.9rem;"><strong>${reply.author_name || reply.author}</strong> - ${reply.time || new Date(reply.created_at).toLocaleString('zh-CN')}</div>
                                             <div style="color: #333; margin-top: 5px;">${reply.content}</div>
                                         </div>
                                     `).join('')}
@@ -831,7 +1178,7 @@ const AppState = {
                 <form id="profile-form" style="max-width: 600px; margin: 0 auto;">
                     <div class="form-group">
                         <label for="profile-name">姓名</label>
-                        <input type="text" id="profile-name" class="form-control" value="${this.userProfile ? this.userProfile.name : ''}" placeholder="请输入姓名" required>
+                        <input type="text" id="profile-name" class="form-control" value="${this.userProfile ? this.userProfile.full_name : ''}" placeholder="请输入姓名" required>
                     </div>
                     
                     <div class="form-group">
@@ -897,7 +1244,6 @@ const AppState = {
             </div>
         `;
         
-        // 更新左侧菜单活动状态
         document.querySelectorAll('.nav-item').forEach(item => {
             item.classList.remove('active');
         });
@@ -967,7 +1313,6 @@ const AppState = {
     },
     
     setupForumEvents() {
-        // 新话题表单
         const form = document.getElementById('new-topic-form');
         if (form) {
             form.addEventListener('submit', (e) => {
@@ -976,7 +1321,6 @@ const AppState = {
             });
         }
         
-        // 回复按钮
         document.querySelectorAll('.reply-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const topicId = e.target.getAttribute('data-id');
@@ -984,7 +1328,6 @@ const AppState = {
             });
         });
         
-        // 回复输入框回车事件
         document.querySelectorAll('.reply-input').forEach(input => {
             input.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
@@ -995,55 +1338,51 @@ const AppState = {
         });
     },
     
-    createNewTopic() {
+    async createNewTopic() {
         const title = document.getElementById('topic-title').value;
         const content = document.getElementById('topic-content').value;
-        const author = this.userProfile ? this.userProfile.name : '匿名用户';
         
         if (!title || !content) {
             alert('请填写完整的话题标题和内容');
             return;
         }
         
+        const authorName = this.userProfile?.full_name || this.currentUser?.email || '匿名用户';
+        
         const newTopic = {
-            id: Date.now(),
-            author: author,
             title: title,
             content: content,
+            author_name: authorName,
             time: new Date().toLocaleString('zh-CN'),
             replies: []
         };
         
-        this.topics.unshift(newTopic);
-        this.saveTopics();
+        const savedTopic = await this.saveTopic(newTopic);
         
-        // 清空表单
-        document.getElementById('topic-title').value = '';
-        document.getElementById('topic-content').value = '';
-        
-        // 重新加载论坛页面
-        this.loadPage('forum');
+        if (savedTopic) {
+            document.getElementById('topic-title').value = '';
+            document.getElementById('topic-content').value = '';
+            this.loadPage('forum');
+        }
     },
     
-    addReply(topicId) {
+    async addReply(topicId) {
         const input = document.querySelector(`.reply-input[data-id="${topicId}"]`);
         const content = input.value.trim();
         
         if (!content) return;
         
-        const topic = this.topics.find(t => t.id == topicId);
-        if (topic) {
-            const author = this.userProfile ? this.userProfile.name : '匿名用户';
-            topic.replies.push({
-                author: author,
-                content: content,
-                time: new Date().toLocaleString('zh-CN')
-            });
-            
-            this.saveTopics();
+        const authorName = this.userProfile?.full_name || this.currentUser?.email || '匿名用户';
+        
+        const reply = {
+            content: content,
+            author_name: authorName
+        };
+        
+        const savedReply = await this.addReplyToTopic(topicId, reply);
+        
+        if (savedReply) {
             input.value = '';
-            
-            // 重新加载论坛页面
             this.loadPage('forum');
         }
     },
@@ -1051,16 +1390,16 @@ const AppState = {
     setupProfileEvents() {
         const form = document.getElementById('profile-form');
         if (form) {
-            form.addEventListener('submit', (e) => {
+            form.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                this.saveUserProfile();
+                await this.saveUserProfile();
             });
         }
     },
     
-    saveUserProfile() {
+    async saveUserProfile() {
         const profile = {
-            name: document.getElementById('profile-name').value,
+            full_name: document.getElementById('profile-name').value,
             title: document.getElementById('profile-title').value,
             department: document.getElementById('profile-department').value,
             hospital: document.getElementById('profile-hospital').value,
@@ -1069,18 +1408,32 @@ const AppState = {
             avatar: document.getElementById('profile-name').value.charAt(0) || '专'
         };
         
-        this.userProfile = profile;
-        this.saveProfile();
+        let success = false;
         
-        // 如果专家列表中还没有该专家，则添加
-        if (!this.experts.some(e => e.name === profile.name)) {
-            profile.id = Date.now();
-            this.experts.push(profile);
-            this.saveExperts();
+        if (this.currentUser && this.supabase) {
+            success = await this.saveProfileToSupabase(profile);
+        } else {
+            this.userProfile = profile;
+            this.saveProfile();
+            success = true;
         }
         
-        alert('名片保存成功！');
-        this.loadPage('profile');
+        if (success) {
+            alert('名片保存成功！');
+            
+            // 如果专家列表中还没有该专家，则添加
+            if (!this.experts.some(e => e.name === profile.full_name)) {
+                const expertToAdd = {
+                    ...profile,
+                    name: profile.full_name
+                };
+                await this.saveExpert(expertToAdd);
+            }
+            
+            this.loadPage('profile');
+        } else {
+            alert('名片保存失败，请重试！');
+        }
     },
     
     shareProfile() {
@@ -1089,17 +1442,14 @@ const AppState = {
             return;
         }
         
-        // 创建分享链接
         const profileData = encodeURIComponent(JSON.stringify(this.userProfile));
         const shareUrl = `${window.location.origin}${window.location.pathname}#profile-share-${profileData}`;
         
-        // 复制到剪贴板
         navigator.clipboard.writeText(shareUrl)
             .then(() => {
                 alert('分享链接已复制到剪贴板！\n\n您可以将此链接发送给其他参会者。');
             })
             .catch(err => {
-                // 如果复制失败，显示分享链接
                 alert(`请复制以下链接分享给其他参会者：\n\n${shareUrl}`);
             });
     },
@@ -1202,11 +1552,59 @@ const AppState = {
                 </div>
             </div>
         `;
+    },
+    
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `custom-notification ${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            padding: 12px 20px;
+            background: ${type === 'success' ? '#4CAF50' : type === 'warning' ? '#FF9800' : '#2196F3'};
+            color: white;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10000;
+            animation: slideInRight 0.3s ease;
+            max-width: 300px;
+            font-size: 14px;
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 300);
+        }, 3000);
+        
+        if (!document.querySelector('#notification-animations')) {
+            const style = document.createElement('style');
+            style.id = 'notification-animations';
+            style.textContent = `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                
+                @keyframes slideOutRight {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
     }
 };
 
 // 初始化应用
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     // 将AppState暴露到全局作用域
     window.app = AppState;
     
@@ -1217,5 +1615,5 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    AppState.init();
+    await AppState.init();
 });

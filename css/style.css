@@ -909,3 +909,165 @@ body {
         margin-right: var(--right-sidebar-width);
     }
 }
+/* ===== 认证相关样式 ===== */
+.auth-section {
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.auth-container {
+    animation: fadeIn 0.3s ease;
+}
+
+.auth-tabs {
+    display: flex;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 10px;
+    background: none;
+    border: none;
+    color: var(--text-medium);
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-bottom: 2px solid transparent;
+}
+
+.auth-tab.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+    font-weight: 600;
+}
+
+.auth-tab:hover:not(.active) {
+    color: var(--text-dark);
+}
+
+.auth-form {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.auth-form.active {
+    display: block;
+}
+
+.auth-form .form-group {
+    margin-bottom: 15px;
+}
+
+.auth-form label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--text-dark);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.auth-form input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: all var(--transition-fast);
+    background: var(--bg-white);
+}
+
+.auth-form input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+}
+
+.auth-form .btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    margin-top: 10px;
+}
+
+/* 通知样式 */
+.auth-notification {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    background: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-medium);
+    z-index: 10000;
+    max-width: 300px;
+    transform: translateX(100%);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.auth-notification.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.auth-notification.success {
+    border-left: 4px solid #4CAF50;
+}
+
+.auth-notification.error {
+    border-left: 4px solid #F44336;
+}
+
+.auth-notification.info {
+    border-left: 4px solid #2196F3;
+}
+
+.notification-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.notification-content i {
+    font-size: 1.2rem;
+}
+
+.notification-content i.fa-check-circle {
+    color: #4CAF50;
+}
+
+.notification-content i.fa-exclamation-circle {
+    color: #F44336;
+}
+
+.notification-content i.fa-info-circle {
+    color: #2196F3;
+}
+
+.notification-content span {
+    font-size: 0.95rem;
+    color: var(--text-dark);
+}
+
+/* 用户已登录时的样式 */
+.user-section {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* 响应式调整 */
+@media (max-width: 767px) {
+    .auth-notification {
+        left: 20px;
+        right: 20px;
+        max-width: none;
+        transform: translateY(-100%);
+    }
+    
+    .auth-notification.show {
+        transform: translateY(0);
+    }
+}
