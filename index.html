@@ -4,11 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>医学年会2024</title>
-    <!-- 添加Supabase客户端 -->
-    <script type="module">
-  // 动态加载Supabase
-  import supabase from './js/supabase.js'
-  window.supabase = supabase
+    <!-- Supabase 配置
+         请在下方设置您的 Supabase 项目信息:
+         1. 访问 https://supabase.io
+         2. 获取您的项目 URL 和 匿名密钥 (anon key)
+         3. 在下方设置 SUPABASE_URL 和 SUPABASE_ANON_KEY
+    -->
+    <script>
+        // 设置 Supabase 配置（请替换为您的实际配置）
+        // 获取方式：Supabase 项目 → Settings → API → Project URL 和 anon key
+        window.SUPABASE_URL = 'https://yuppkmtscafzvfxgsjci.supabase.co';
+        window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1cHBrbXRzY2FmenZmeGdzamNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MjQ5MDAsImV4cCI6MjA4NjEwMDkwMH0.E_ICyXQsUfTSt2ZM7AvcCrjT7Or2ASxXQUoEAiBlkcU';
     </script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -128,45 +134,36 @@
     </div>
     
     <!-- 登录/注册表单（未登录时显示） -->
-    <div id="auth-section" class="auth-section" style="display: none;">
-        <div class="auth-container">
-            <h4 style="margin-bottom: 15px; color: var(--text-dark);">登录 / 注册</h4>
-            
-            <div class="auth-tabs">
-                <button class="auth-tab active" data-tab="login">登录</button>
-                <button class="auth-tab" data-tab="register">注册</button>
+    <div id="auth-section" class="auth-section" style="display: block;">
+        <!-- 登录表单 -->
+        <form id="login-form" class="auth-form">
+            <div class="form-group">
+                <label for="login-email">邮箱</label>
+                <input type="email" id="login-email" placeholder="请输入邮箱" required>
             </div>
-            
-            <!-- 登录表单 -->
-            <form id="login-form" class="auth-form active">
-                <div class="form-group">
-                    <label for="login-email">邮箱</label>
-                    <input type="email" id="login-email" placeholder="请输入邮箱" required>
-                </div>
-                <div class="form-group">
-                    <label for="login-password">密码</label>
-                    <input type="password" id="login-password" placeholder="请输入密码" required>
-                </div>
-                <button type="submit" class="btn btn-primary">登录</button>
-            </form>
-            
-            <!-- 注册表单 -->
-            <form id="register-form" class="auth-form">
-                <div class="form-group">
-                    <label for="register-email">邮箱</label>
-                    <input type="email" id="register-email" placeholder="请输入邮箱" required>
-                </div>
-                <div class="form-group">
-                    <label for="register-password">密码</label>
-                    <input type="password" id="register-password" placeholder="至少6位字符" required>
-                </div>
-                <div class="form-group">
-                    <label for="register-username">用户名</label>
-                    <input type="text" id="register-username" placeholder="显示名称" required>
-                </div>
-                <button type="submit" class="btn btn-primary">注册</button>
-            </form>
-        </div>
+            <div class="form-group">
+                <label for="login-password">密码</label>
+                <input type="password" id="login-password" placeholder="请输入密码" required>
+            </div>
+            <button type="submit" class="btn btn-primary">登录</button>
+        </form>
+        
+        <!-- 注册表单 -->
+        <form id="register-form" class="auth-form">
+            <div class="form-group">
+                <label for="register-email">邮箱</label>
+                <input type="email" id="register-email" placeholder="请输入邮箱" required>
+            </div>
+            <div class="form-group">
+                <label for="register-password">密码</label>
+                <input type="password" id="register-password" placeholder="至少6位字符" required>
+            </div>
+            <div class="form-group">
+                <label for="register-username">用户名</label>
+                <input type="text" id="register-username" placeholder="显示名称" required>
+            </div>
+            <button type="submit" class="btn btn-primary">注册</button>
+        </form>
     </div>
     
     <!-- 用户信息（登录后显示） -->
@@ -226,7 +223,16 @@
 
     <!-- 加载JavaScript -->
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script src="js/main.js"></script>
-    <script src="js/app.js"></script>
+    <!-- 加载应用 -->
+    <script type="module">
+        // 动态导入并初始化应用
+        import('./js/main.js').then(module => {
+            // main.js 会在模块加载时自动初始化
+            console.log('应用模块加载完成');
+        }).catch(error => {
+            console.error('应用加载失败:', error);
+        });
+    </script>
+    <script defer src="js/app.js"></script>
 </body>
 </html>

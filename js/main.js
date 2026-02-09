@@ -19,41 +19,53 @@ const AppState = {
         // 检查认证状态
         await this.checkAuth();
         
-        // 加载数据
-        await Promise.all([
-            this.loadExperts(),
-            this.loadTopics(),
-            this.loadSponsors()
-        ]);
-        
+        // 设置事件监听器
         this.setupEventListeners();
-        this.loadPage('home');
-        this.updateProfilePreview();
         
         // 应用默认收起状态
         this.applyDefaultCollapsedState();
         
         // 设置移动端按钮事件
         this.setupMobileMenuButtons();
+        
+        // 根据认证状态决定显示什么页面
+        if (this.currentUser) {
+            // 用户已登录，加载数据并显示首页
+            await Promise.all([
+                this.loadExperts(),
+                this.loadTopics(),
+                this.loadSponsors()
+            ]);
+            this.loadPage('home');
+            this.updateProfilePreview();
+        } else {
+            // 用户未登录，显示认证页面
+            this.loadPage('auth');
+            this.updateProfilePreview();
+        }
     },
     
     async initSupabase() {
         try {
-            // 动态导入 Supabase
-            const supabaseModule = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
-            const { createClient } = supabaseModule;
+            // 直接使用动态导入来创建 Supabase 客户端
+            // 这避免了全局作用域的时序问题
+            const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
             
-            // 从环境变量或默认值获取配置
-            const supabaseUrl = window.SUPABASE_URL || 'https://your-project.supabase.co';
-            const supabaseKey = window.SUPABASE_ANON_KEY || 'your-anon-key';
+            if (!window.SUPABASE_URL || !window.SUPABASE_ANON_KEY) {
+                console.warn('Supabase 配置不完整，使用模拟客户端');
+                console.warn('请在 index.html 中设置 window.SUPABASE_URL 和 window.SUPABASE_ANON_KEY');
+                this.supabase = this.createMockSupabase();
+                return;
+            }
             
-            this.supabase = createClient(supabaseUrl, supabaseKey);
-            window.supabase = this.supabase; // 暴露到全局
+            // 创建 Supabase 客户端
+            this.supabase = createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
+            window.supabase = this.supabase; // 暴露到全局供其他脚本使用
             
-            console.log('Supabase 客户端初始化成功');
+            console.log('✓ Supabase 客户端初始化成功');
         } catch (error) {
             console.error('初始化 Supabase 失败:', error);
-            // 使用后备方案：创建虚拟 Supabase 客户端
+            console.warn('使用模拟客户端进行演示');
             this.supabase = this.createMockSupabase();
         }
     },
@@ -78,7 +90,11 @@ const AppState = {
     },
     
     async checkAuth() {
-        if (!this.supabase) return;
+        // 如果 supabase 不可用，跳过认证检查
+        if (!this.supabase || !this.supabase.auth) {
+            console.warn('Supabase Auth 不可用，跳过认证检查');
+            return;
+        }
         
         try {
             const { data: { session }, error } = await this.supabase.auth.getSession();
@@ -334,6 +350,14 @@ const AppState = {
             }
         });
         
+        // 登出按钮处理
+        document.getElementById('logout-btn')?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            if (confirm('确定要登出吗？')) {
+                await this.handleLogout();
+            }
+        });
+        
         document.addEventListener('click', (e) => {
             if (window.innerWidth <= 1024) {
                 const isSidebar = e.target.closest('.sidebar') || e.target.closest('.right-sidebar');
@@ -344,6 +368,42 @@ const AppState = {
                 }
             }
         });
+        
+        // 右侧栏登录表单处理
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('login-email').value;
+                const password = document.getElementById('login-password').value;
+                if (email && password) {
+                    await this.handleLogin(email, password);
+                    loginForm.reset();
+                }
+            });
+        }
+        
+        // 右侧栏注册表单处理
+        const registerForm = document.getElementById('register-form');
+        if (registerForm) {
+            registerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('register-email').value;
+                const password = document.getElementById('register-password').value;
+                const username = document.getElementById('register-username').value;
+                
+                if (email && password && username) {
+                    // 检查密码长度
+                    if (password.length < 6) {
+                        this.showNotification('密码至少需要6个字符', 'warning');
+                        return;
+                    }
+                    
+                    await this.handleRegister(email, username, password);
+                    registerForm.reset();
+                }
+            });
+        }
     },
     
     toggleSidebar() {
@@ -776,7 +836,14 @@ const AppState = {
     },
     
     updateProfilePreview() {
-        if (this.userProfile) {
+        const authSection = document.getElementById('auth-section');
+        const userSection = document.getElementById('user-section');
+        
+        if (this.userProfile && this.currentUser) {
+            // 用户已登录，显示用户信息，隐藏登录表单
+            if (authSection) authSection.style.display = 'none';
+            if (userSection) userSection.style.display = 'block';
+            
             const profileAvatar = document.querySelector('.profile-avatar');
             const profileName = document.querySelector('.profile-name');
             const profileTitle = document.querySelector('.profile-title');
@@ -791,6 +858,10 @@ const AppState = {
                 (this.userProfile.full_name?.charAt(0) || '医');
             if (userName) userName.textContent = this.userProfile.full_name || '参会专家';
         } else {
+            // 用户未登录，显示登录表单，隐藏用户信息
+            if (authSection) authSection.style.display = 'block';
+            if (userSection) userSection.style.display = 'none';
+            
             const profileName = document.querySelector('.profile-name');
             const profileTitle = document.querySelector('.profile-title');
             const userName = document.querySelector('.user-name');
@@ -816,6 +887,10 @@ const AppState = {
         }
         
         switch(page) {
+            case 'auth':
+                contentDiv.innerHTML = this.renderAuth();
+                this.setupAuthEvents();
+                break;
             case 'home':
                 contentDiv.innerHTML = this.renderHome();
                 this.setupHomeEvents();
@@ -853,7 +928,305 @@ const AppState = {
             this.renderSponsorLogos();
         }
     },
-    
+
+    renderAuth() {
+        return `
+            <div class="auth-page">
+                <div class="auth-container-centered">
+                    <div class="auth-header">
+                        <i class="fas fa-heartbeat auth-logo"></i>
+                        <h2>医学年会2024</h2>
+                        <p>专业医学交流平台</p>
+                    </div>
+                    
+                    <div class="auth-tabs-container">
+                        <div class="auth-tabs">
+                            <button class="auth-tab active" data-tab="login">登录</button>
+                            <button class="auth-tab" data-tab="register">注册</button>
+                        </div>
+                        
+                        <!-- 登录表单 -->
+                        <form id="auth-login-form" class="auth-form active">
+                            <div class="form-group">
+                                <label for="auth-login-email">邮箱</label>
+                                <input type="email" id="auth-login-email" placeholder="请输入邮箱地址" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="auth-login-password">密码</label>
+                                <input type="password" id="auth-login-password" placeholder="请输入密码" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block">登录</button>
+                            <div class="form-link">
+                                <a href="#" id="forgot-password-btn">忘记密码？</a>
+                            </div>
+                        </form>
+                        
+                        <!-- 注册表单 -->
+                        <form id="auth-register-form" class="auth-form">
+                            <div class="form-group">
+                                <label for="auth-register-email">邮箱</label>
+                                <input type="email" id="auth-register-email" placeholder="请输入邮箱地址" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="auth-register-username">用户名</label>
+                                <input type="text" id="auth-register-username" placeholder="请输入显示名称" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="auth-register-password">密码</label>
+                                <input type="password" id="auth-register-password" placeholder="至少6位字符" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="auth-register-confirm">确认密码</label>
+                                <input type="password" id="auth-register-confirm" placeholder="再次输入密码" required>
+                            </div>
+                            <div class="form-group checkbox">
+                                <input type="checkbox" id="agree-terms" required>
+                                <label for="agree-terms">我同意服务条款和隐私政策</label>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-block">注册</button>
+                        </form>
+                    </div>
+                    
+                    <div class="auth-footer">
+                        <p>© 2024 医学年会 | 保护您的隐私和数据安全</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    setupAuthEvents() {
+        // 标签页切换
+        const authTabs = document.querySelectorAll('.auth-tab');
+        authTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tabName = tab.getAttribute('data-tab');
+                
+                // 更新激活标签
+                authTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // 显示对应表单
+                document.querySelectorAll('.auth-form').forEach(form => {
+                    form.classList.remove('active');
+                });
+                document.getElementById(`auth-${tabName}-form`).classList.add('active');
+            });
+        });
+        
+        // 登录表单提交
+        const loginForm = document.getElementById('auth-login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('auth-login-email').value;
+                const password = document.getElementById('auth-login-password').value;
+                await this.handleLogin(email, password);
+            });
+        }
+        
+        // 注册表单提交
+        const registerForm = document.getElementById('auth-register-form');
+        if (registerForm) {
+            registerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const email = document.getElementById('auth-register-email').value;
+                const username = document.getElementById('auth-register-username').value;
+                const password = document.getElementById('auth-register-password').value;
+                const confirm = document.getElementById('auth-register-confirm').value;
+                
+                if (password !== confirm) {
+                    this.showNotification('两次输入的密码不一致', 'error');
+                    return;
+                }
+                
+                await this.handleRegister(email, username, password);
+            });
+        }
+        
+        // 忘记密码
+        const forgotBtn = document.getElementById('forgot-password-btn');
+        if (forgotBtn) {
+            forgotBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const email = prompt('请输入您的邮箱地址：');
+                if (email) {
+                    this.handleForgotPassword(email);
+                }
+            });
+        }
+    },
+
+    async handleLogin(email, password) {
+        if (!this.supabase || !this.supabase.auth) {
+            this.showNotification('Supabase 认证未初始化，请刷新页面重试', 'error');
+            console.error('Supabase Auth 不可用:', {
+                supabase: !!this.supabase,
+                auth: !!this.supabase?.auth,
+                signInWithPassword: !!this.supabase?.auth?.signInWithPassword
+            });
+            return;
+        }
+        
+        try {
+            const { data, error } = await this.supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+            
+            if (error) {
+                this.showNotification(error.message || '登录失败，请检查邮箱和密码', 'error');
+                return;
+            }
+            
+            this.showNotification('登录成功，正在加载数据...', 'success');
+            
+            // 设置当前用户
+            this.currentUser = data.user;
+            
+            // 延迟后加载数据并跳转首页
+            setTimeout(async () => {
+                await this.loadUserProfileFromSupabase();
+                await Promise.all([
+                    this.loadExperts(),
+                    this.loadTopics(),
+                    this.loadSponsors()
+                ]);
+                this.updateProfilePreview();
+                this.loadPage('home');
+            }, 1000);
+        } catch (error) {
+            console.error('登录异常:', error);
+            this.showNotification('登录异常，请重试：' + error.message, 'error');
+        }
+    },
+
+    async handleRegister(email, username, password) {
+        if (!this.supabase || !this.supabase.auth) {
+            this.showNotification('Supabase 认证未初始化，请刷新页面重试', 'error');
+            console.error('Supabase Auth 不可用:', { 
+                supabase: !!this.supabase, 
+                auth: !!this.supabase?.auth,
+                signUp: !!this.supabase?.auth?.signUp 
+            });
+            return;
+        }
+        
+        try {
+            const { data, error } = await this.supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: {
+                        username: username
+                    }
+                }
+            });
+            
+            if (error) {
+                this.showNotification(error.message || '注册失败', 'error');
+                return;
+            }
+            
+            // 创建用户资料
+            if (data.user) {
+                const profileData = {
+                    id: data.user.id,
+                    username: username,
+                    full_name: username,
+                    title: '参会医生',
+                    department: '未设置',
+                    hospital: '未设置',
+                    avatar: username.charAt(0).toUpperCase(),
+                    bio: '',
+                    contact: '',
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+                
+                const { error: profileError } = await this.supabase
+                    .from('profiles')
+                    .insert([profileData]);
+                
+                if (profileError) {
+                    console.error('创建用户资料失败:', profileError);
+                }
+            }
+            
+            this.showNotification('注册成功！请检查邮箱验证邮件，验证后即可登录', 'success');
+            
+            // 清空表单
+            document.getElementById('auth-register-form').reset();
+            
+            // 切换到登录标签页
+            const loginTab = document.querySelector('[data-tab="login"]');
+            if (loginTab) {
+                loginTab.click();
+            }
+        } catch (error) {
+            console.error('注册异常:', error);
+            this.showNotification('注册异常，请重试：' + error.message, 'error');
+        }
+    },
+
+    async handleForgotPassword(email) {
+        if (!this.supabase) {
+            this.showNotification('应用未正确初始化，请刷新页面', 'error');
+            return;
+        }
+        
+        try {
+            const { error } = await this.supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: window.location.origin + '/reset-password.html'
+            });
+            
+            if (error) {
+                this.showNotification(error.message || '请求失败', 'error');
+                return;
+            }
+            
+            this.showNotification('密码重置邮件已发送，请检查邮箱', 'success');
+        } catch (error) {
+            console.error('重置密码异常:', error);
+            this.showNotification('请求异常，请重试', 'error');
+        }
+    },
+
+    async handleLogout() {
+        if (!this.supabase) {
+            this.showNotification('应用未正确初始化，请刷新页面', 'error');
+            return;
+        }
+        
+        try {
+            const { error } = await this.supabase.auth.signOut();
+            
+            if (error) {
+                this.showNotification(error.message || '登出失败', 'error');
+                return;
+            }
+            
+            // 清空用户数据
+            this.currentUser = null;
+            this.userProfile = null;
+            this.experts = [];
+            this.topics = [];
+            this.sponsors = [];
+            
+            this.showNotification('已安全登出', 'success');
+            
+            // 延迟后跳转到登录页面
+            setTimeout(() => {
+                this.loadPage('auth');
+                this.updateProfilePreview();
+            }, 1000);
+        } catch (error) {
+            console.error('登出异常:', error);
+            this.showNotification('登出异常，请重试', 'error');
+        }
+    },
+
     renderHome() {
         return `
             <div class="page-card">
@@ -1604,7 +1977,8 @@ const AppState = {
 };
 
 // 初始化应用
-document.addEventListener('DOMContentLoaded', async () => {
+function initializeApp() {
+    console.log('初始化应用');
     // 将AppState暴露到全局作用域
     window.app = AppState;
     
@@ -1615,5 +1989,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
     
-    await AppState.init();
-});
+    // 启动应用
+    AppState.init().catch(error => {
+        console.error('应用初始化失败:', error);
+    });
+}
+
+// 根据 DOM 的加载状态选择初始化方式
+if (document.readyState === 'loading') {
+    // DOM 还在加载中，使用 DOMContentLoaded 事件
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    // DOM 已经加载完毕，直接初始化
+    console.log('DOM 已加载，直接初始化应用');
+    initializeApp();
+}
