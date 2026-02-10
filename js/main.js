@@ -28,17 +28,21 @@ const AppState = {
     // 设置移动端按钮事件
     this.setupMobileMenuButtons();
     
+    // 初始化数据
+    this.setupAppUtilities();
+    
     // 根据认证状态决定显示什么页面
     if (this.currentUser) {
         // 用户已登录，加载数据并显示首页
         await this.loadData();
         this.loadPage('home');
-        this.updateProfilePreview();
     } else {
         // 用户未登录，显示认证页面
         this.loadPage('auth');
-        this.updateProfilePreview();
     }
+    
+    // 更新用户界面（仅调用一次）
+    this.updateProfilePreview();
 },
 
 // 新增：统一加载数据
@@ -305,10 +309,10 @@ async loadData() {
         console.log('AppState.setupEventListeners()');
         
         document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', (e) => {
+            item.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const page = item.getAttribute('data-page');
-                this.loadPage(page);
+                await this.loadPage(page);
                 
                 document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
@@ -333,17 +337,17 @@ async loadData() {
             });
         }
         
-        document.getElementById('edit-profile-btn')?.addEventListener('click', (e) => {
+        document.getElementById('edit-profile-btn')?.addEventListener('click', async (e) => {
             e.preventDefault();
-            this.loadPage('profile');
+            await this.loadPage('profile');
             if (window.innerWidth <= 1024) {
                 this.closeAllSidebars();
             }
         });
         
-        document.getElementById('my-card-btn')?.addEventListener('click', (e) => {
+        document.getElementById('my-card-btn')?.addEventListener('click', async (e) => {
             e.preventDefault();
-            this.loadPage('profile');
+            await this.loadPage('profile');
             if (window.innerWidth <= 1024) {
                 this.closeAllSidebars();
             }
@@ -353,8 +357,8 @@ async loadData() {
             document.querySelector('.info-bar').style.display = 'none';
         });
         
-        document.querySelector('.profile-quick-view')?.addEventListener('click', () => {
-            this.loadPage('profile');
+        document.querySelector('.profile-quick-view')?.addEventListener('click', async () => {
+            await this.loadPage('profile');
             if (window.innerWidth <= 1024) {
                 this.closeAllSidebars();
             }
@@ -512,6 +516,39 @@ async loadData() {
     
     toggleLeftSidebar() {
         this.toggleSidebar();
+    },
+    
+    setupAppUtilities() {
+        // 设置键盘快捷键
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+H 或 Cmd+H 返回首页
+            if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+                e.preventDefault();
+                this.loadPage('home');
+            }
+            
+            // Esc 键关闭右侧边栏
+            if (e.key === 'Escape' && !this.rightSidebarCollapsed) {
+                this.toggleRightSidebar();
+            }
+            
+            // Ctrl+B 或 Cmd+B 切换左侧边栏
+            if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+                e.preventDefault();
+                this.toggleLeftSidebar();
+            }
+        });
+        
+        // 设置离线/在线检测
+        window.addEventListener('online', () => {
+            this.showNotification('网络连接已恢复', 'success');
+        });
+        
+        window.addEventListener('offline', () => {
+            this.showNotification('网络连接已断开，部分功能可能受限', 'warning');
+        });
+        
+        console.log('✓ 应用工具已初始化（快捷键、网络检测）');
     },
     
 async loadExperts() {
@@ -924,7 +961,7 @@ async loadSponsors() {
         }
     },
     
-    loadPage(page) {
+    async loadPage(page) {
         console.log('AppState.loadPage()', page);
         this.currentPage = page;
         const contentDiv = document.getElementById('page-content');
@@ -952,7 +989,8 @@ async loadSponsors() {
                 this.setupExpertEvents();
                 break;
             case 'schedule':
-                contentDiv.innerHTML = this.renderSchedule();
+                contentDiv.innerHTML = await this.renderSchedule();
+                this.setupScheduleEvents();
                 break;
             case 'gallery':
                 contentDiv.innerHTML = this.renderGallery();
@@ -1145,8 +1183,8 @@ async loadSponsors() {
                     this.loadTopics(),
                     this.loadSponsors()
                 ]);
-                this.updateProfilePreview();
-                this.loadPage('home');
+                // updateProfilePreview() 由 onAuthStateChange 事件处理
+                await this.loadPage('home');
             }, 1000);
         } catch (error) {
             console.error('登录异常:', error);
@@ -1269,9 +1307,9 @@ async loadSponsors() {
             this.showNotification('已安全登出', 'success');
             
             // 延迟后跳转到登录页面
-            setTimeout(() => {
-                this.loadPage('auth');
-                this.updateProfilePreview();
+            setTimeout(async () => {
+                await this.loadPage('auth');
+                // updateProfilePreview() 由 onAuthStateChange 事件处理
             }, 1000);
         } catch (error) {
             console.error('登出异常:', error);
@@ -1372,10 +1410,10 @@ getLogoFontSize(logoText) {
     setupHomeEvents() {
         const homeItems = Array.from(document.querySelectorAll('.home-module'));
         homeItems.forEach(item => {
-            item.addEventListener('click', () => {
+            item.addEventListener('click', async () => {
                 const page = item.getAttribute('data-page');
                 if (!page) return;
-                this.loadPage(page);
+                await this.loadPage(page);
 
                 document.querySelectorAll('.nav-item').forEach(navItem => {
                     navItem.classList.remove('active');
@@ -1676,53 +1714,175 @@ formatTime(dateTime) {
     },
 
     renderProfile() {
+        const name = this.userProfile ? this.userProfile.full_name : '';
+        const title = this.userProfile ? this.userProfile.title : '';
+        const dept = this.userProfile ? this.userProfile.department : '';
+        const hospital = this.userProfile ? this.userProfile.hospital : '';
+        const bio = this.userProfile ? this.userProfile.bio : '';
+        const contact = this.userProfile ? this.userProfile.contact : '';
+        const firstChar = name ? name.charAt(0) : '👤';
+        
         return `
             <div class="page-card">
                 <h1 class="page-title">
                     <i class="fas fa-id-card"></i>专家名片
                 </h1>
                 
-                <form id="profile-form" style="max-width: 600px; margin: 0 auto;">
-                    <div class="form-group">
-                        <label for="profile-name">姓名</label>
-                        <input type="text" id="profile-name" class="form-control" value="${this.userProfile ? this.userProfile.full_name : ''}" placeholder="请输入姓名" required>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; max-width: 1000px; margin: 0 auto;">
+                    <!-- 左栏：编辑表单 -->
+                    <div>
+                        <h3 style="color: #0066cc; margin-bottom: 20px; font-weight: 600;">编辑信息</h3>
+                        <form id="profile-form">
+                            <div class="form-group">
+                                <label for="profile-name" style="display: flex; align-items: center; gap: 8px; color: #333; font-weight: 500;">
+                                    <i class="fas fa-user" style="color: #0066cc;"></i>姓名
+                                </label>
+                                <input type="text" id="profile-name" class="form-control" value="${name}" placeholder="请输入姓名" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="profile-title" style="display: flex; align-items: center; gap: 8px; color: #333; font-weight: 500;">
+                                    <i class="fas fa-briefcase" style="color: #0066cc;"></i>职位
+                                </label>
+                                <input type="text" id="profile-title" class="form-control" value="${title}" placeholder="请输入职位" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="profile-department" style="display: flex; align-items: center; gap: 8px; color: #333; font-weight: 500;">
+                                    <i class="fas fa-sitemap" style="color: #0066cc;"></i>科室
+                                </label>
+                                <input type="text" id="profile-department" class="form-control" value="${dept}" placeholder="请输入科室" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="profile-hospital" style="display: flex; align-items: center; gap: 8px; color: #333; font-weight: 500;">
+                                    <i class="fas fa-hospital-user" style="color: #0066cc;"></i>医院
+                                </label>
+                                <input type="text" id="profile-hospital" class="form-control" value="${hospital}" placeholder="请输入医院名称" required>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="profile-bio" style="display: flex; align-items: center; gap: 8px; color: #333; font-weight: 500;">
+                                    <i class="fas fa-clipboard" style="color: #0066cc;"></i>个人简介
+                                </label>
+                                <textarea id="profile-bio" class="form-control" placeholder="请输入个人简介" style="height: 80px; font-family: inherit;">${bio}</textarea>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="profile-contact" style="display: flex; align-items: center; gap: 8px; color: #333; font-weight: 500;">
+                                    <i class="fas fa-phone" style="color: #0066cc;"></i>联系方式
+                                </label>
+                                <input type="text" id="profile-contact" class="form-control" value="${contact}" placeholder="请输入联系方式">
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 16px; font-weight: 600; background: linear-gradient(135deg, #0066cc, #0099ff); border: none; color: white; border-radius: 8px; cursor: pointer; transition: all 0.3s;">
+                                <i class="fas fa-save"></i> 保存名片
+                            </button>
+                        </form>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="profile-title">职位</label>
-                        <input type="text" id="profile-title" class="form-control" value="${this.userProfile ? this.userProfile.title : ''}" placeholder="请输入职位" required>
+                    <!-- 右栏：名片预览 -->
+                    <div>
+                        <h3 style="color: #0066cc; margin-bottom: 20px; font-weight: 600;">名片预览</h3>
+                        <div style="
+                            background: linear-gradient(135deg, #0066cc 0%, #00b4d8 100%);
+                            border-radius: 16px;
+                            padding: 30px;
+                            color: white;
+                            position: relative;
+                            overflow: hidden;
+                            box-shadow: 0 10px 30px rgba(0, 102, 204, 0.3);
+                            min-height: 400px;
+                            display: flex;
+                            flex-direction: column;
+                        ">
+                            <!-- 装饰圆圈 -->
+                            <div style="
+                                position: absolute;
+                                width: 150px;
+                                height: 150px;
+                                background: rgba(255, 255, 255, 0.1);
+                                border-radius: 50%;
+                                top: -50px;
+                                right: -50px;
+                            "></div>
+                            <div style="
+                                position: absolute;
+                                width: 100px;
+                                height: 100px;
+                                background: rgba(255, 255, 255, 0.08);
+                                border-radius: 50%;
+                                bottom: -30px;
+                                left: -30px;
+                            "></div>
+                            
+                            <!-- 内容 -->
+                            <div style="position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+                                <!-- 头像 -->
+                                <div style="
+                                    width: 80px;
+                                    height: 80px;
+                                    background: rgba(255, 255, 255, 0.3);
+                                    border-radius: 50%;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    font-size: 36px;
+                                    font-weight: bold;
+                                    margin-bottom: 20px;
+                                    border: 3px solid rgba(255, 255, 255, 0.5);
+                                ">
+                                    ${firstChar}
+                                </div>
+                                
+                                <!-- 信息 -->
+                                <div style="flex: 1;">
+                                    <div style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">
+                                        ${name || '（未填写）'}
+                                    </div>
+                                    <div style="font-size: 14px; opacity: 0.95; margin-bottom: 15px; border-top: 2px solid rgba(255, 255, 255, 0.3); padding-top: 12px;">
+                                        <div style="margin-bottom: 6px;"><strong>职位：</strong> ${title || '（未填写）'}</div>
+                                        <div style="margin-bottom: 6px;"><strong>科室：</strong> ${dept || '（未填写）'}</div>
+                                        <div style="margin-bottom: 6px;"><strong>医院：</strong> ${hospital || '（未填写）'}</div>
+                                    </div>
+                                    ${bio ? `<div style="font-size: 12px; opacity: 0.85; line-height: 1.4; margin-top: 12px;">${bio}</div>` : ''}
+                                </div>
+                                
+                                <!-- 底部联系方式 -->
+                                <div style="border-top: 2px solid rgba(255, 255, 255, 0.3); padding-top: 12px; margin-top: 15px; font-size: 12px;">
+                                    ${contact ? `<i class="fas fa-phone" style="margin-right: 6px;"></i>${contact}` : '<span style="opacity: 0.7;">（未填写联系方式）</span>'}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        ${this.userProfile ? `
+                            <button class="btn btn-secondary" onclick="AppState.shareProfile()" style="
+                                width: 100%;
+                                margin-top: 15px;
+                                padding: 12px;
+                                background: linear-gradient(135deg, #00b4d8, #00d4ff);
+                                border: none;
+                                color: white;
+                                font-weight: 600;
+                                border-radius: 8px;
+                                cursor: pointer;
+                                transition: all 0.3s;
+                                font-size: 14px;
+                            ">
+                                <i class="fas fa-share-alt"></i> 分享名片
+                            </button>
+                        ` : ''}
                     </div>
-                    
-                    <div class="form-group">
-                        <label for="profile-department">科室</label>
-                        <input type="text" id="profile-department" class="form-control" value="${this.userProfile ? this.userProfile.department : ''}" placeholder="请输入科室" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="profile-hospital">医院</label>
-                        <input type="text" id="profile-hospital" class="form-control" value="${this.userProfile ? this.userProfile.hospital : ''}" placeholder="请输入医院名称" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="profile-bio">个人简介</label>
-                        <textarea id="profile-bio" class="form-control" placeholder="请输入个人简介" style="height: 80px;">${this.userProfile ? this.userProfile.bio : ''}</textarea>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="profile-contact">联系方式</label>
-                        <input type="text" id="profile-contact" class="form-control" value="${this.userProfile ? this.userProfile.contact : ''}" placeholder="请输入联系方式">
-                    </div>
-                    
-                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-bottom: 10px;">
-                        <i class="fas fa-save"></i>保存名片
-                    </button>
-                </form>
+                </div>
                 
-                ${this.userProfile ? `
-                    <button class="btn btn-secondary" onclick="AppState.shareProfile()" style="width: 100%; max-width: 600px; margin: 0 auto; display: block;">
-                        <i class="fas fa-share-alt"></i>分享名片
-                    </button>
-                ` : ''}
+                <!-- 移动端响应式调整 -->
+                <style>
+                    @media (max-width: 768px) {
+                        div[style*="grid-template-columns: 1fr 1fr"] {
+                            grid-template-columns: 1fr !important;
+                        }
+                    }
+                </style>
             </div>
         `;
     },
@@ -1819,6 +1979,42 @@ formatTime(dateTime) {
         document.getElementById('page-content').innerHTML = detailHTML;
     },
     
+    setupScheduleEvents() {
+        // 处理日期筛选按钮
+        const filterButtons = document.querySelectorAll('.day-filter');
+        const daySchedules = document.querySelectorAll('.day-schedule');
+        
+        filterButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const selectedDay = e.target.getAttribute('data-day');
+                
+                // 更新按钮样式
+                filterButtons.forEach(btn => {
+                    if (btn.getAttribute('data-day') === 'all' && selectedDay === 'all') {
+                        btn.style.background = '#0066cc';
+                        btn.style.color = 'white';
+                    } else if (btn.getAttribute('data-day') === selectedDay && selectedDay !== 'all') {
+                        btn.style.background = '#0066cc';
+                        btn.style.color = 'white';
+                    } else {
+                        btn.style.background = '#f0f8ff';
+                        btn.style.color = '#0066cc';
+                    }
+                });
+                
+                // 更新日程显示
+                daySchedules.forEach(schedule => {
+                    const scheduleDay = schedule.getAttribute('data-day');
+                    if (selectedDay === 'all' || selectedDay === scheduleDay) {
+                        schedule.style.display = 'block';
+                    } else {
+                        schedule.style.display = 'none';
+                    }
+                });
+            });
+        });
+    },
+
     setupForumEvents() {
         const form = document.getElementById('new-topic-form');
         if (form) {
@@ -1869,7 +2065,7 @@ formatTime(dateTime) {
         if (savedTopic) {
             document.getElementById('topic-title').value = '';
             document.getElementById('topic-content').value = '';
-            this.loadPage('forum');
+            await this.loadPage('forum');
         }
     },
     
@@ -1890,7 +2086,7 @@ formatTime(dateTime) {
         
         if (savedReply) {
             input.value = '';
-            this.loadPage('forum');
+            await this.loadPage('forum');
         }
     },
     
@@ -1937,7 +2133,7 @@ formatTime(dateTime) {
                 await this.saveExpert(expertToAdd);
             }
             
-            this.loadPage('profile');
+            await this.loadPage('profile');
         } else {
             alert('名片保存失败，请重试！');
         }
