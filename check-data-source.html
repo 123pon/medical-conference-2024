@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据源诊断</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0066cc;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #333;
+            margin-top: 20px;
+            font-size: 1.2rem;
+        }
+        .status-good {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .status-bad {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .status-warning {
+            color: #FF9800;
+            font-weight: bold;
+        }
+        .info-box {
+            background: #f0f8ff;
+            padding: 15px;
+            border-left: 4px solid #0066cc;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 1rem;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        .danger-btn {
+            background: #f44336;
+        }
+        .danger-btn:hover {
+            background: #da190b;
+        }
+        .data-section {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+        }
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>医学年会 - 数据源诊断工具</h1>
+        <p>此工具帮助你检查应用的数据来源和存储情况。</p>
+    </div>
+
+    <div class="card">
+        <h2>1. 连接诊断</h2>
+        <div id="connection-status"></div>
+        <button onclick="checkConnection()">检查 Supabase 连接</button>
+    </div>
+
+    <div class="card">
+        <h2>2. 本地存储检查</h2>
+        <div id="storage-status"></div>
+        <button onclick="checkLocalStorage()">检查本地存储</button>
+        <button class="danger-btn" onclick="clearLocalStorage()">清空所有本地存储</button>
+    </div>
+
+    <div class="card">
+        <h2>3. Supabase 表数据</h2>
+        <div id="supabase-data"></div>
+        <button onclick="checkSupabaseData()">加载 Supabase 数据</button>
+    </div>
+
+    <div class="card">
+        <h2>4. 操作</h2>
+        <button onclick="reloadPage()">刷新页面</button>
+        <button onclick="goHome()">返回首页</button>
+    </div>
+
+    <script>
+        // 从 HTML 中获取 Supabase 配置
+        const SUPABASE_URL = window.SUPABASE_URL || 'https://yuppkmtscafzvfxgsjci.supabase.co';
+        const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1cHBrbXRzY2FmenZmeGdzamNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MjQ5MDAsImV4cCI6MjA4NjEwMDkwMH0.E_ICyXQsUfTSt2ZM7AvcCrjT7Or2ASxXQUoEAiBlkcU';
+
+        let supabase = null;
+
+        // 动态加载 Supabase 库
+        (async () => {
+            try {
+                const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+                supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            } catch (error) {
+                console.error('加载 Supabase 失败:', error);
+            }
+        })();
+
+        async function checkConnection() {
+            const statusDiv = document.getElementById('connection-status');
+            if (!supabase) {
+                statusDiv.innerHTML = '<p class="status-warning">Supabase 库未加载，重新加载...</p>';
+                setTimeout(checkConnection, 2000);
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase.auth.getSession();
+                if (error) {
+                    statusDiv.innerHTML = `
+                        <p class="status-bad">❌ Supabase 连接失败</p>
+                        <p>错误: ${error.message}</p>
+                    `;
+                } else {
+                    statusDiv.innerHTML = `
+                        <p class="status-good">✓ Supabase 连接成功</p>
+                        <div class="info-box">
+                            <p>项目 URL: ${SUPABASE_URL}</p>
+                            <p>认证状态: ${data.session ? '已登录' : '未登录'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<p class="status-bad">❌ 连接异常: ${error.message}</p>`;
+            }
+        }
+
+        function checkLocalStorage() {
+            const statusDiv = document.getElementById('storage-status');
+            const keys = [
+                'conference_experts',
+                'conference_topics',
+                'conference_sponsors',
+                'conference_profile'
+            ];
+
+            let html = '<p><strong>本地存储数据：</strong></p>';
+            let hasData = false;
+
+            keys.forEach(key => {
+                const data = localStorage.getItem(key);
+                if (data) {
+                    hasData = true;
+                    const parsed = JSON.parse(data);
+                    const count = Array.isArray(parsed) ? parsed.length : 1;
+                    html += `<p>✓ <code>${key}</code>: ${count} 条记录</p>`;
+                }
+            });
+
+            if (!hasData) {
+                html += '<p class="status-good">✓ 本地存储为空（已清空或从未存储）</p>';
+            }
+
+            statusDiv.innerHTML = html;
+        }
+
+        function clearLocalStorage() {
+            if (confirm('确定要清空所有本地存储数据吗？\n这将删除本地缓存的专家、话题和赞助商信息。')) {
+                const keys = [
+                    'conference_experts',
+                    'conference_topics',
+                    'conference_sponsors',
+                    'conference_profile'
+                ];
+                keys.forEach(key => localStorage.removeItem(key));
+                alert('本地存储已清空！');
+                checkLocalStorage();
+            }
+        }
+
+        async function checkSupabaseData() {
+            const dataDiv = document.getElementById('supabase-data');
+            
+            if (!supabase) {
+                dataDiv.innerHTML = '<p class="status-warning">Supabase 库未加载...</p>';
+                return;
+            }
+
+            dataDiv.innerHTML = '<p>正在加载...</p>';
+
+            try {
+                // 检查各个表的数据
+                const tables = [
+                    { name: 'experts', title: '专家' },
+                    { name: 'forum_topics', title: '论坛话题' },
+                    { name: 'sponsors', title: '赞助商' },
+                    { name: 'schedule_items', title: '会议日程' }
+                ];
+
+                let html = '';
+
+                for (const { name, title } of tables) {
+                    try {
+                        const { data, error } = await supabase.from(name).select('*').limit(5);
+                        if (error) {
+                            html += `<p class="status-bad">❌ ${title} (${name}): 表不存在或查询失败</p>`;
+                            html += `<p style="color: #666; font-size: 0.9rem;">错误: ${error.message}</p>`;
+                        } else {
+                            const count = data ? data.length : 0;
+                            html += `<p class="status-good">✓ ${title} (${name}): ${count} 条记录</p>`;
+                        }
+                    } catch (err) {
+                        html += `<p class="status-bad">❌ ${title} (${name}): 异常 - ${err.message}</p>`;
+                    }
+                }
+
+                dataDiv.innerHTML = html;
+            } catch (error) {
+                dataDiv.innerHTML = `<p class="status-bad">数据加载失败: ${error.message}</p>`;
+            }
+        }
+
+        function reloadPage() {
+            location.reload();
+        }
+
+        function goHome() {
+            window.location.href = './index.html';
+        }
+
+        // 页面加载时自动检查
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                checkConnection();
+                checkLocalStorage();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

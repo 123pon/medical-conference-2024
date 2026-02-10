@@ -520,16 +520,21 @@ async loadExperts() {
             const { data, error } = await this.supabase
                 .from('experts')
                 .select('*')
-                .eq('is_featured', true)
                 .order('created_at', { ascending: false });
             
-            if (!error) {
+            if (error) {
+                console.error('从Supabase加载专家数据失败:', error);
+                // 仅在 Supabase 连接失败时才使用本地存储
+                this.loadExpertsFromLocal();
+            } else {
+                // Supabase 可用，使用其数据（即使是空数组）
                 this.experts = data || [];
-                return;
+                console.log('✓ 从Supabase加载专家数据:', this.experts.length, '条');
             }
+            return;
         }
         
-        // 如果Supabase不可用，使用本地缓存
+        console.warn('Supabase未初始化，使用本地数据');
         this.loadExpertsFromLocal();
     } catch (error) {
         console.error('加载专家数据异常:', error);
@@ -672,12 +677,18 @@ async loadTopics() {
                 .order('created_at', { ascending: false })
                 .limit(20);
             
-            if (!error) {
+            if (error) {
+                console.error('从Supabase加载论坛数据失败:', error);
+                this.loadTopicsFromLocal();
+            } else {
+                // Supabase 可用，使用其数据
                 this.topics = data || [];
-                return;
+                console.log('✓ 从Supabase加载论坛数据:', this.topics.length, '条');
             }
+            return;
         }
         
+        console.warn('Supabase未初始化，使用本地数据');
         this.loadTopicsFromLocal();
     } catch (error) {
         console.error('加载话题数据异常:', error);
@@ -804,16 +815,21 @@ async loadSponsors() {
             const { data, error } = await this.supabase
                 .from('sponsors')
                 .select('*')
-                .eq('is_active', true)
                 .order('level', { ascending: true })
                 .order('name', { ascending: true });
             
-            if (!error && data) {
-                this.sponsors = data;
-                return;
+            if (error) {
+                console.error('从Supabase加载赞助商数据失败:', error);
+                this.loadSponsorsFromLocal();
+            } else {
+                // Supabase 可用，使用其数据
+                this.sponsors = data || [];
+                console.log('✓ 从Supabase加载赞助商数据:', this.sponsors.length, '条');
             }
+            return;
         }
         
+        console.warn('Supabase未初始化，使用本地数据');
         this.loadSponsorsFromLocal();
     } catch (error) {
         console.error('加载赞助商数据异常:', error);
@@ -1265,6 +1281,28 @@ async loadSponsors() {
 
 // 在 renderHome() 方法中，更新赞助商部分
 renderHome() {
+    // 动态生成8个功能模块
+    const modules = [
+        { page: 'home', icon: 'fa-home', label: '首页' },
+        { page: 'experts', icon: 'fa-user-md', label: '专家库' },
+        { page: 'schedule', icon: 'fa-calendar-alt', label: '会议日程' },
+        { page: 'gallery', icon: 'fa-images', label: '会议内容' },
+        { page: 'forum', icon: 'fa-comments', label: '学术论坛' },
+        { page: 'sponsors', icon: 'fa-handshake', label: '赞助商' },
+        { page: 'profile', icon: 'fa-id-card', label: '我的名片' },
+        { page: 'share', icon: 'fa-share-alt', label: '分享会议' }
+    ];
+    
+    const moduleHTML = modules.map(m => `
+        <div class="home-module" data-page="${m.page}" style="background: white; padding: 25px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.08); transition: all 0.3s; border: 1px solid #f0f0f0;">
+            <div style="font-size: 2.5rem; color: #0066cc; margin-bottom: 15px;">
+                <i class="fas ${m.icon}"></i>
+            </div>
+            <div style="font-size: 1rem; font-weight: 600; color: #333; margin-bottom: 10px;">${m.label}</div>
+            <div style="font-size: 0.85rem; color: #999;">点击进入</div>
+        </div>
+    `).join('');
+    
     return `
         <div class="page-card">
             <h1 class="page-title">
@@ -1275,8 +1313,7 @@ renderHome() {
             </p>
             
             <div class="home-modules">
-                <!-- 保持现有模块 -->
-                ${this.homeModules}
+                ${moduleHTML}
             </div>
             
             <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
