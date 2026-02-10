@@ -10,40 +10,50 @@ const AppState = {
     currentUser: null,
     supabase: null,
     
-    async init() {
-        console.log('AppState.init()');
-        
-        // 初始化 Supabase 客户端
-        await this.initSupabase();
-        
-        // 检查认证状态
-        await this.checkAuth();
-        
-        // 设置事件监听器
-        this.setupEventListeners();
-        
-        // 应用默认收起状态
-        this.applyDefaultCollapsedState();
-        
-        // 设置移动端按钮事件
-        this.setupMobileMenuButtons();
-        
-        // 根据认证状态决定显示什么页面
-        if (this.currentUser) {
-            // 用户已登录，加载数据并显示首页
-            await Promise.all([
-                this.loadExperts(),
-                this.loadTopics(),
-                this.loadSponsors()
-            ]);
-            this.loadPage('home');
-            this.updateProfilePreview();
-        } else {
-            // 用户未登录，显示认证页面
-            this.loadPage('auth');
-            this.updateProfilePreview();
-        }
-    },
+ async init() {
+    console.log('AppState.init()');
+    
+    // 初始化 Supabase 客户端
+    await this.initSupabase();
+    
+    // 检查认证状态
+    await this.checkAuth();
+    
+    // 设置事件监听器
+    this.setupEventListeners();
+    
+    // 应用默认收起状态
+    this.applyDefaultCollapsedState();
+    
+    // 设置移动端按钮事件
+    this.setupMobileMenuButtons();
+    
+    // 根据认证状态决定显示什么页面
+    if (this.currentUser) {
+        // 用户已登录，加载数据并显示首页
+        await this.loadData();
+        this.loadPage('home');
+        this.updateProfilePreview();
+    } else {
+        // 用户未登录，显示认证页面
+        this.loadPage('auth');
+        this.updateProfilePreview();
+    }
+},
+
+// 新增：统一加载数据
+async loadData() {
+    try {
+        await Promise.all([
+            this.loadExperts(),
+            this.loadTopics(),
+            this.loadSponsors()
+        ]);
+        console.log('数据加载完成');
+    } catch (error) {
+        console.error('数据加载失败:', error);
+    }
+},
     
     async initSupabase() {
         try {
@@ -504,30 +514,28 @@ const AppState = {
         this.toggleSidebar();
     },
     
-    async loadExperts() {
-        try {
-            if (this.supabase) {
-                // 尝试从 Supabase 加载
-                const { data, error } = await this.supabase
-                    .from('experts')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-                
-                if (!error && data) {
-                    this.experts = data;
-                    // 同步到本地存储作为缓存
-                    localStorage.setItem('conference_experts', JSON.stringify(data));
-                    return;
-                }
-            }
+async loadExperts() {
+    try {
+        if (this.supabase) {
+            const { data, error } = await this.supabase
+                .from('experts')
+                .select('*')
+                .eq('is_featured', true)
+                .order('created_at', { ascending: false });
             
-            // 如果 Supabase 加载失败，使用本地缓存
-            this.loadExpertsFromLocal();
-        } catch (error) {
-            console.error('加载专家数据异常:', error);
-            this.loadExpertsFromLocal();
+            if (!error) {
+                this.experts = data || [];
+                return;
+            }
         }
-    },
+        
+        // 如果Supabase不可用，使用本地缓存
+        this.loadExpertsFromLocal();
+    } catch (error) {
+        console.error('加载专家数据异常:', error);
+        this.loadExpertsFromLocal();
+    }
+},
     
     loadExpertsFromLocal() {
         const savedExperts = localStorage.getItem('conference_experts');
@@ -655,32 +663,28 @@ const AppState = {
         }
     },
     
-    async loadTopics() {
-        try {
-            if (this.supabase) {
-                // 尝试从 Supabase 加载
-                const { data, error } = await this.supabase
-                    .from('topics')
-                    .select('*')
-                    .order('created_at', { ascending: false });
-                
-                if (!error && data) {
-                    this.topics = data.map(topic => ({
-                        ...topic,
-                        replies: topic.replies || []
-                    }));
-                    localStorage.setItem('conference_topics', JSON.stringify(this.topics));
-                    return;
-                }
-            }
+async loadTopics() {
+    try {
+        if (this.supabase) {
+            const { data, error } = await this.supabase
+                .from('forum_topics')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(20);
             
-            // 如果 Supabase 加载失败，使用本地缓存
-            this.loadTopicsFromLocal();
-        } catch (error) {
-            console.error('加载话题数据异常:', error);
-            this.loadTopicsFromLocal();
+            if (!error) {
+                this.topics = data || [];
+                return;
+            }
         }
-    },
+        
+        this.loadTopicsFromLocal();
+    } catch (error) {
+        console.error('加载话题数据异常:', error);
+        this.loadTopicsFromLocal();
+    }
+},
+
     
     loadTopicsFromLocal() {
         const savedTopics = localStorage.getItem('conference_topics');
@@ -794,16 +798,48 @@ const AppState = {
         }
     },
     
-    loadSponsors() {
-        const savedSponsors = localStorage.getItem('conference_sponsors');
-        if (savedSponsors) {
-            this.sponsors = JSON.parse(savedSponsors);
-        } else {
-            this.sponsors = this.getDefaultSponsors();
-            this.saveSponsorsToLocal();
+async loadSponsors() {
+    try {
+        if (this.supabase) {
+            const { data, error } = await this.supabase
+                .from('sponsors')
+                .select('*')
+                .eq('is_active', true)
+                .order('level', { ascending: true })
+                .order('name', { ascending: true });
+            
+            if (!error && data) {
+                this.sponsors = data;
+                return;
+            }
         }
-    },
-    
+        
+        this.loadSponsorsFromLocal();
+    } catch (error) {
+        console.error('加载赞助商数据异常:', error);
+        this.loadSponsorsFromLocal();
+    }
+},
+    async loadSchedule() {
+    try {
+        if (this.supabase) {
+            const { data, error } = await this.supabase
+                .from('schedule_items')
+                .select('*')
+                .eq('status', 'published')
+                .order('day', { ascending: true })
+                .order('start_time', { ascending: true });
+            
+            if (!error) {
+                return data || [];
+            }
+        }
+        return [];
+    } catch (error) {
+        console.error('加载会议日程失败:', error);
+        return [];
+    }
+},
     getDefaultSponsors() {
         return [
             { id: 1, name: '辉瑞制药', logo: '辉瑞', category: '药品' },
@@ -1227,101 +1263,74 @@ const AppState = {
         }
     },
 
-    renderHome() {
-        return `
-            <div class="page-card">
-                <h1 class="page-title">
-                    <i class="fas fa-heartbeat"></i>欢迎参加2024医学年会
-                </h1>
-                <p style="text-align: center; color: #666; max-width: 800px; margin: 0 auto 30px; font-size: 1.1rem;">
-                    汇聚医学智慧，共创健康未来。本次会议汇集了国内外顶尖医学专家，共同探讨医学前沿技术和临床实践经验。
-                </p>
+// 在 renderHome() 方法中，更新赞助商部分
+renderHome() {
+    return `
+        <div class="page-card">
+            <h1 class="page-title">
+                <i class="fas fa-heartbeat"></i>欢迎参加2024医学年会
+            </h1>
+            <p style="text-align: center; color: #666; max-width: 800px; margin: 0 auto 30px; font-size: 1.1rem;">
+                汇聚医学智慧，共创健康未来。本次会议汇集了国内外顶尖医学专家，共同探讨医学前沿技术和临床实践经验。
+            </p>
+            
+            <div class="home-modules">
+                <!-- 保持现有模块 -->
+                ${this.homeModules}
+            </div>
+            
+            <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
+                <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
+                    <i class="fas fa-handshake"></i> 战略合作伙伴
+                </h3>
                 
-                <div class="home-modules">
-                    <div class="home-module" data-page="experts" onclick="AppState.loadPage('experts')">
-                        <div class="home-module-icon">
-                            <i class="fas fa-user-md"></i>
-                        </div>
-                        <h3 class="home-module-title">专家库</h3>
-                        <p class="home-module-desc">浏览参会专家信息，查看专家详情和研究方向</p>
-                    </div>
-                    
-                    <div class="home-module" data-page="profile" onclick="AppState.loadPage('profile')">
-                        <div class="home-module-icon">
-                            <i class="fas fa-id-card"></i>
-                        </div>
-                        <h3 class="home-module-title">专家名片</h3>
-                        <p class="home-module-desc">创建并分享您的专家名片，与其他专家建立联系</p>
-                    </div>
-                    
-                    <div class="home-module" data-page="schedule" onclick="AppState.loadPage('schedule')">
-                        <div class="home-module-icon">
-                            <i class="fas fa-calendar-alt"></i>
-                        </div>
-                        <h3 class="home-module-title">会议日程</h3>
-                        <p class="home-module-desc">查看详细会议安排，了解各场次时间和地点</p>
-                    </div>
-                    
-                    <div class="home-module" data-page="gallery" onclick="AppState.loadPage('gallery')">
-                        <div class="home-module-icon">
-                            <i class="fas fa-images"></i>
-                        </div>
-                        <h3 class="home-module-title">会议内容</h3>
-                        <p class="home-module-desc">浏览学术海报、会议照片和资料下载</p>
-                    </div>
-                    
-                    <div class="home-module" data-page="forum" onclick="AppState.loadPage('forum')">
-                        <div class="home-module-icon">
-                            <i class="fas fa-comments"></i>
-                        </div>
-                        <h3 class="home-module-title">学术论坛</h3>
-                        <p class="home-module-desc">参与专业学术讨论，分享您的见解和经验</p>
-                    </div>
-                    
-                    <div class="home-module" data-page="sponsors" onclick="AppState.loadPage('sponsors')">
-                        <div class="home-module-icon">
-                            <i class="fas fa-handshake"></i>
-                        </div>
-                        <h3 class="home-module-title">赞助商</h3>
-                        <p class="home-module-desc">了解会议赞助商信息，探索最新医疗技术和产品</p>
-                    </div>
-                    
-                    <div class="home-module" data-page="share" onclick="AppState.loadPage('share')">
-                        <div class="home-module-icon">
-                            <i class="fas fa-share-alt"></i>
-                        </div>
-                        <h3 class="home-module-title">分享会议</h3>
-                        <p class="home-module-desc">邀请同事参会，分享会议信息和精彩内容</p>
-                    </div>
-                    
-                    <div class="home-module" data-page="my-schedule" onclick="AppState.showMySchedule()">
-                        <div class="home-module-icon">
-                            <i class="fas fa-calendar-check"></i>
-                        </div>
-                        <h3 class="home-module-title">我的日程</h3>
-                        <p class="home-module-desc">管理个人会议日程，设置提醒和关注场次</p>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
-                    <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
-                        <i class="fas fa-handshake"></i> 战略合作伙伴
-                    </h3>
-                    
-                    <div class="sponsors-grid">
-                        ${this.sponsors.slice(0, 12).map(sponsor => `
-                            <div class="sponsor-item" onclick="AppState.showSponsorDetail(${sponsor.id})">
-                                <div class="sponsor-logo-placeholder" style="background: linear-gradient(135deg, #ffe6e6, #ffcccc); color: #cc0000;">
-                                    ${sponsor.logo}
-                                </div>
-                                <div class="sponsor-name">${sponsor.name}</div>
+                <div class="sponsors-grid">
+                    ${(this.sponsors || []).slice(0, 12).map(sponsor => `
+                        <div class="sponsor-item" onclick="app.showSponsorDetail('${sponsor.id}')">
+                            <div class="sponsor-logo-placeholder" 
+                                 style="background: linear-gradient(135deg, #ffe6e6, #ffcccc); color: #cc0000; font-weight: bold; font-size: ${this.getLogoFontSize(sponsor.logo_text)};">
+                                ${sponsor.logo_text || sponsor.name.substring(0, 2)}
                             </div>
-                        `).join('')}
-                    </div>
+                            <div class="sponsor-name">${sponsor.name}</div>
+                            <div class="sponsor-level" style="font-size: 0.75rem; color: #999; margin-top: 5px;">
+                                ${sponsor.level === 'platinum' ? '🏅 铂金赞助' : 
+                                  sponsor.level === 'gold' ? '🥇 金牌赞助' : 
+                                  sponsor.level === 'silver' ? '🥈 银牌赞助' : '🥉 铜牌赞助'}
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
-        `;
-    },
+        </div>
+    `;
+},
+
+// 添加赞助商详情的显示方法
+showSponsorDetail(sponsorId) {
+    const sponsor = this.sponsors.find(s => s.id === sponsorId);
+    if (!sponsor) return;
+    
+    alert(`
+赞助商详情：
+    
+名称：${sponsor.name}
+级别：${sponsor.level === 'platinum' ? '铂金赞助商' : 
+       sponsor.level === 'gold' ? '金牌赞助商' : 
+       sponsor.level === 'silver' ? '银牌赞助商' : '铜牌赞助商'}
+类别：${sponsor.category}
+${sponsor.description ? `简介：${sponsor.description}\n` : ''}
+${sponsor.website_url ? `网址：${sponsor.website_url}\n` : ''}
+感谢赞助商对本次医学年会的大力支持！
+    `);
+},
+
+// 辅助方法：根据logo文本长度调整字体大小
+getLogoFontSize(logoText) {
+    if (!logoText) return '1.2rem';
+    if (logoText.length <= 2) return '1.5rem';
+    if (logoText.length <= 4) return '1.2rem';
+    return '1rem';
+},
     
     setupHomeEvents() {
         const homeItems = Array.from(document.querySelectorAll('.home-module'));
@@ -1447,32 +1456,36 @@ const AppState = {
         `;
     },
     
-    renderExperts() {
-        return `
-            <div class="page-card">
-                <h1 class="page-title">
-                    <i class="fas fa-user-md"></i>专家库
-                </h1>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
-                    ${this.experts.map(expert => `
-                        <div style="background: white; border-radius: 10px; padding: 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
-                            <div style="text-align: center; margin-bottom: 15px;">
-                                <div style="width: 80px; height: 80px; border-radius: 50%; background: #0066cc; color: white; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto; margin-bottom: 10px;">${expert.avatar}</div>
-                                <h3 style="color: #333; margin: 10px 0;">${expert.name}</h3>
-                                <p style="color: #0066cc; margin: 5px 0;">${expert.title}</p>
-                                <p style="color: #666; font-size: 0.9rem; margin: 5px 0;">${expert.department}</p>
-                            </div>
-                            <button class="btn btn-primary view-expert" data-id="${expert.id}" style="width: 100%;">
-                                <i class="fas fa-eye"></i>查看详情
-                            </button>
+renderExperts() {
+    return `
+        <div class="page-card">
+            <h1 class="page-title">
+                <i class="fas fa-user-md"></i>专家库
+            </h1>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;">
+                ${this.experts.map(expert => `
+                    <div style="background: white; border-radius: 10px; padding: 20px; box-shadow: 0 3px 10px rgba(0,0,0,0.1);">
+                        <div style="text-align: center; margin-bottom: 15px;">
+                            <div style="width: 80px; height: 80px; border-radius: 50%; background: #0066cc; color: white; display: flex; align-items: center; justify-content: center; font-size: 2rem; margin: 0 auto; margin-bottom: 10px;">${expert.avatar || '专'}</div>
+                            <h3 style="color: #333; margin: 10px 0;">${expert.name}</h3>
+                            <p style="color: #0066cc; margin: 5px 0;">${expert.title}</p>
+                            <p style="color: #666; font-size: 0.9rem; margin: 5px 0;">${expert.department} | ${expert.hospital}</p>
                         </div>
-                    `).join('')}
-                </div>
+                        <p style="color: #555; font-size: 0.9rem; line-height: 1.4; margin-bottom: 15px; height: 60px; overflow: hidden;">${expert.bio || '暂无简介'}</p>
+                        <button class="btn btn-primary view-expert" data-id="${expert.id}" style="width: 100%;">
+                            <i class="fas fa-eye"></i>查看详情
+                        </button>
+                    </div>
+                `).join('')}
             </div>
-        `;
-    },
+        </div>
+    `;
+},
 
-    renderSchedule() {
+async renderSchedule() {
+    const scheduleItems = await this.loadSchedule();
+    
+    if (scheduleItems.length === 0) {
         return `
             <div class="page-card">
                 <h1 class="page-title">
@@ -1481,11 +1494,95 @@ const AppState = {
                 <div style="text-align: center; padding: 40px;">
                     <i class="fas fa-calendar-alt" style="font-size: 4rem; color: #0066cc; margin-bottom: 20px;"></i>
                     <h2 style="color: #333; margin-bottom: 15px;">会议日程</h2>
-                    <p style="color: #666;">会议日程信息即将更新...</p>
+                    <p style="color: #666;">正在加载会议日程...</p>
                 </div>
             </div>
         `;
-    },
+    }
+    
+    // 按日期分组
+    const scheduleByDay = {};
+    scheduleItems.forEach(item => {
+        if (!scheduleByDay[item.day]) {
+            scheduleByDay[item.day] = [];
+        }
+        scheduleByDay[item.day].push(item);
+    });
+    
+    return `
+        <div class="page-card">
+            <h1 class="page-title">
+                <i class="fas fa-calendar-alt"></i>会议日程
+            </h1>
+            
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #333; margin-bottom: 20px;">会议时间：2024年11月15-17日</h3>
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    ${Object.keys(scheduleByDay).map(day => `
+                        <button class="day-filter" data-day="${day}" style="padding: 8px 16px; background: #f0f8ff; border: 1px solid #0066cc; border-radius: 20px; color: #0066cc; cursor: pointer;">
+                            第${day}天
+                        </button>
+                    `).join('')}
+                    <button class="day-filter" data-day="all" style="padding: 8px 16px; background: #0066cc; border: 1px solid #0066cc; border-radius: 20px; color: white; cursor: pointer;">
+                        全部日程
+                    </button>
+                </div>
+            </div>
+            
+            ${Object.entries(scheduleByDay).map(([day, items]) => `
+                <div class="day-schedule" data-day="${day}">
+                    <h3 style="color: #0066cc; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #0066cc;">
+                        第${day}天 (${this.formatScheduleDate(parseInt(day))})
+                    </h3>
+                    
+                    <div style="display: grid; gap: 15px;">
+                        ${items.map(item => `
+                            <div style="background: white; border-radius: 10px; padding: 20px; border-left: 4px solid #0066cc; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                    <div>
+                                        <h4 style="color: #333; margin-bottom: 5px;">${item.title}</h4>
+                                        <div style="display: flex; gap: 15px; font-size: 0.9rem; color: #666;">
+                                            <span><i class="far fa-clock"></i> ${this.formatTime(item.start_time)} - ${this.formatTime(item.end_time)}</span>
+                                            <span><i class="fas fa-map-marker-alt"></i> ${item.location || '待定'}</span>
+                                            <span style="background: #f0f8ff; padding: 2px 8px; border-radius: 4px; color: #0066cc;">
+                                                ${item.type === 'keynote' ? '主旨演讲' : 
+                                                  item.type === 'workshop' ? '工作坊' : 
+                                                  item.type === 'panel' ? '专题讨论' : 
+                                                  item.type === 'poster' ? '海报展示' : item.type}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    ${item.is_featured ? '<span style="background: #ff9900; color: white; padding: 3px 10px; border-radius: 4px; font-size: 0.8rem;">推荐</span>' : ''}
+                                </div>
+                                
+                                ${item.description ? `<p style="color: #555; margin-bottom: 10px;">${item.description}</p>` : ''}
+                                
+                                ${item.speakers && item.speakers.length > 0 ? `
+                                    <div style="margin-top: 10px;">
+                                        <strong style="color: #333;">讲者：</strong>
+                                        <span style="color: #666;">${item.speakers.join('、')}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+},
+
+// 添加日期格式化辅助方法
+formatScheduleDate(day) {
+    const baseDate = new Date('2024-11-15');
+    baseDate.setDate(baseDate.getDate() + (day - 1));
+    return baseDate.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+},
+
+formatTime(dateTime) {
+    const date = new Date(dateTime);
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+},
 
     renderForum() {
         return `

@@ -16,6 +16,18 @@
         window.SUPABASE_URL = 'https://yuppkmtscafzvfxgsjci.supabase.co';
         window.SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl1cHBrbXRzY2FmenZmeGdzamNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1MjQ5MDAsImV4cCI6MjA4NjEwMDkwMH0.E_ICyXQsUfTSt2ZM7AvcCrjT7Or2ASxXQUoEAiBlkcU';
     </script>
+    <!-- 在现有的script标签后添加 -->
+<script type="module">
+    // 可选：运行数据迁移脚本
+    // import('./js/migrate-to-supabase.js').catch(console.error);
+    
+    // 或者手动触发迁移
+    function runMigration() {
+        if (confirm('是否将本地数据迁移到Supabase数据库？\n\n迁移后本地数据将被清除。')) {
+            import('./js/migrate-to-supabase.js').catch(console.error)
+        }
+    }
+</script>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
