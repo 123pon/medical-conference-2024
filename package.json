@@ -1,0 +1,14 @@
+{
+  "name": "medical-conference-2024",
+  "version": "1.0.0",
+  "description": "2024医学年会网站",
+  "scripts": {
+    "build": "node scripts/copy-files.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@cloudbase/cli": "^1.5.0"
+  }
+}

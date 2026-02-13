@@ -1,0 +1,52 @@
+name: Deploy to Tencent CloudBase
+
+on:
+  push:
+    branches:
+      - main  # 这里改成你的主分支名，通常是 main 或 master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Dependencies and Build
+        run: |
+          npm install
+          npm run build
+
+      - name: Install CloudBase CLI
+        run: npm install -g @cloudbase/cli
+
+      - name: Deploy to CloudBase
+        env:
+          # 使用你提供的 Secrets 名称：
+          # - TCB_SECRET_ID  (作为 API Key ID)
+          # - TCB_SECRET_KEY (作为 API Key)
+          # - TCB_ENV_ID     (可选，环境 id)
+          TCB_API_KEY_ID: ${{ secrets.TCB_SECRET_ID }}
+          TCB_API_KEY: ${{ secrets.TCB_SECRET_KEY }}
+          TCB_ENV_ID: ${{ secrets.TCB_ENV_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TCB_API_KEY_ID:-}" ] || [ -z "${TCB_API_KEY:-}" ]; then
+            echo "Missing TCB API credentials. Please set repository secrets: TCB_API_KEY_ID and TCB_API_KEY"
+            exit 1
+          fi
+          tcb login --apiKeyId "$TCB_API_KEY_ID" --apiKey "$TCB_API_KEY"
+          # 如果提供了 TCB_ENV_ID，则以 -e 参数传入，否则不传该参数
+          extra=""
+          if [ -n "${TCB_ENV_ID:-}" ]; then
+            extra="-e $TCB_ENV_ID"
+          fi
+          # 注意：下面命令中的 `/` 表示部署到静态托管根目录，请确保与你的环境匹配
+          # 使用 "./dist"（或你的构建输出目录）进行部署
+          sh -c "tcb hosting deploy ./dist / $extra"
