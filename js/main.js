@@ -3,6 +3,7 @@ const AppState = {
     currentPage: 'home',
     experts: [],
     topics: [],
+    agents: [],
     userProfile: null,
     sponsors: [],
     sidebarCollapsed: true,
@@ -51,7 +52,8 @@ async loadData() {
         await Promise.all([
             this.loadExperts(),
             this.loadTopics(),
-            this.loadSponsors()
+            this.loadSponsors(),
+            this.loadAgents()
         ]);
         console.log('数据加载完成');
     } catch (error) {
@@ -587,6 +589,75 @@ async loadExperts() {
             this.experts = this.getDefaultExperts();
             this.saveExpertsToLocal();
         }
+    },
+    
+    async loadAgents() {
+        try {
+            if (this.supabase) {
+                const { data, error } = await this.supabase
+                    .from('agents')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                    console.error('从 Supabase 加载 Agent 数据失败:', error);
+                    this.loadAgentsFromLocal();
+                } else {
+                    this.agents = data || [];
+                    console.log('✓ 从 Supabase 加载 Agent 数据:', this.agents.length, '条');
+                }
+                return;
+            }
+            
+            console.warn('Supabase未初始化，使用本地数据');
+            this.loadAgentsFromLocal();
+        } catch (error) {
+            console.error('加载 Agent 数据异常:', error);
+            this.loadAgentsFromLocal();
+        }
+    },
+    
+    loadAgentsFromLocal() {
+        const savedAgents = localStorage.getItem('conference_agents');
+        if (savedAgents) {
+            this.agents = JSON.parse(savedAgents);
+        } else {
+            this.agents = this.getDefaultAgents();
+            this.saveAgentsToLocal();
+        }
+    },
+    
+    getDefaultAgents() {
+        return [
+            {
+                id: 1,
+                name: 'Medical AI 助手',
+                category: '专科咨询',
+                description: '提供医学专科知识学习和案例讨论支持',
+                image_url: null,
+                created_at: new Date().toISOString()
+            },
+            {
+                id: 2,
+                name: '会议管理帮手',
+                category: '会议管理',
+                description: '为本次医学年会提供下案会议组织、日程安排、参会者管理',
+                image_url: null,
+                created_at: new Date().toISOString()
+            },
+            {
+                id: 3,
+                name: '互动分享帮手',
+                category: '社交互动',
+                description: '便于参会者之间的互动与信息分享，构建学术人脚网络',
+                image_url: null,
+                created_at: new Date().toISOString()
+            }
+        ];
+    },
+    
+    saveAgentsToLocal() {
+        localStorage.setItem('conference_agents', JSON.stringify(this.agents));
     },
     
     getDefaultExperts() {
@@ -1319,16 +1390,14 @@ async loadSponsors() {
 
 // 在 renderHome() 方法中，更新赞助商部分
 renderHome() {
-    // 动态生成8个功能模块
+    // 动态生成6个功能模块（已删除"首页"和"分享会议"）
     const modules = [
-        { page: 'home', icon: 'fa-home', label: '首页' },
         { page: 'experts', icon: 'fa-user-md', label: '专家库' },
         { page: 'schedule', icon: 'fa-calendar-alt', label: '会议日程' },
         { page: 'gallery', icon: 'fa-images', label: '会议内容' },
         { page: 'forum', icon: 'fa-comments', label: '学术论坛' },
         { page: 'sponsors', icon: 'fa-handshake', label: '赞助商' },
-        { page: 'profile', icon: 'fa-id-card', label: '我的名片' },
-        { page: 'share', icon: 'fa-share-alt', label: '分享会议' }
+        { page: 'profile', icon: 'fa-id-card', label: '我的名片' }
     ];
     
     const moduleHTML = modules.map(m => `
@@ -1355,6 +1424,44 @@ renderHome() {
             </div>
             
             <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
+                <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
+                    <i class="fas fa-robot"></i> 优秀Agent展示
+                </h3>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; margin-bottom: 40px;">
+                    ${(this.agents || []).slice(0, 3).map(agent => `
+                        <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.08); transition: all 0.3s; border: 1px solid #f0f0f0; cursor: pointer;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 5px 15px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 3px 10px rgba(0,0,0,0.08)'">
+                            <div style="height: 200px; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; overflow: hidden;">
+                                ${agent.image_url ? `<img src="${agent.image_url}" style="width: 100%; height: 100%; object-fit: cover;">` : `<i class="fas fa-image"></i>`}
+                            </div>
+                            <div style="padding: 20px;">
+                                <div style="font-weight: 600; color: #0066cc; margin-bottom: 8px; font-size: 1.1rem;">${agent.name}</div>
+                                <div style="font-size: 0.9rem; color: #666; line-height: 1.6; margin-bottom: 12px;">${agent.description || '暂无介绍'}</div>
+                                <div style="font-size: 0.85rem; color: #999;">${agent.category || '通用Agent'}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
+                <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
+                    <i class="fas fa-user-md"></i> 特邀专家
+                </h3>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px;">
+                    ${(this.experts || []).slice(0, 6).map(expert => `
+                        <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.08);" onclick="app.showExpertDetail('${expert.id}')" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
+                            <div style="font-size: 3rem; margin-bottom: 10px;">${expert.avatar}</div>
+                            <div style="font-weight: 600; color: #0066cc; margin-bottom: 5px; font-size: 1rem;">${expert.name}</div>
+                            <div style="font-size: 0.85rem; color: #666; margin-bottom: 3px;">${expert.title}</div>
+                            <div style="font-size: 0.8rem; color: #999;">${expert.department}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <div style="margin-top: 30px; padding-top: 30px; border-top: 1px solid #eee;">
                 <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
                     <i class="fas fa-handshake"></i> 战略合作伙伴
                 </h3>
@@ -1474,7 +1581,7 @@ getLogoFontSize(logoText) {
                         </div>
                         <h3 style="margin-bottom: 10px;">分享链接</h3>
                         <p style="color: #666; margin-bottom: 20px; font-size: 0.9rem;">复制会议链接发送给同事</p>
-                        <button class="btn btn-primary" onclick="AppState.copyConferenceLink()">
+                        <button class="btn btn-primary" onclick="app.copyConferenceLink()">
                             <i class="fas fa-copy"></i>复制链接
                         </button>
                     </div>
@@ -1498,7 +1605,7 @@ getLogoFontSize(logoText) {
                         </div>
                         <h3 style="margin-bottom: 10px;">邀请函</h3>
                         <p style="color: #666; margin-bottom: 20px; font-size: 0.9rem;">生成并发送电子邀请函</p>
-                        <button class="btn btn-primary" onclick="AppState.generateInvitation()">
+                        <button class="btn btn-primary" onclick="app.generateInvitation()">
                             <i class="fas fa-file-pdf"></i>生成邀请函
                         </button>
                     </div>
@@ -1856,7 +1963,7 @@ formatTime(dateTime) {
                         </div>
                         
                         ${this.userProfile ? `
-                            <button class="btn btn-secondary" onclick="AppState.shareProfile()" style="
+                            <button class="btn btn-secondary" onclick="app.shareProfile()" style="
                                 width: 100%;
                                 margin-top: 15px;
                                 padding: 12px;
@@ -1953,7 +2060,7 @@ formatTime(dateTime) {
         
         const detailHTML = `
             <div class="page-card">
-                <button class="btn btn-primary" onclick="AppState.loadPage('experts')" style="margin-bottom: 20px;">
+                <button class="btn btn-primary" onclick="app.loadPage('experts')" style="margin-bottom: 20px;">
                     <i class="fas fa-arrow-left"></i>返回专家列表
                 </button>
                 
