@@ -6,6 +6,8 @@ const AppState = {
     agents: [],
     userProfile: null,
     sponsors: [],
+    contactCards: [],
+    myScheduleItems: [],
     sidebarCollapsed: true,
     rightSidebarCollapsed: true,
     currentUser: null,
@@ -28,6 +30,10 @@ const AppState = {
     
     // 设置移动端按钮事件
     this.setupMobileMenuButtons();
+
+    // 加载本地功能数据
+    this.loadContactCardsFromLocal();
+    this.loadMyScheduleFromLocal();
     
     // 初始化数据
     this.setupAppUtilities();
@@ -44,6 +50,10 @@ const AppState = {
     
     // 更新用户界面（仅调用一次）
     this.updateProfilePreview();
+
+    // 处理扫码名片导入
+    this.handleIncomingCardFromHash();
+    this.processPendingCardImport();
 },
 
 // 新增：统一加载数据
@@ -350,6 +360,14 @@ async loadData() {
         document.getElementById('my-card-btn')?.addEventListener('click', async (e) => {
             e.preventDefault();
             await this.loadPage('profile');
+            if (window.innerWidth <= 1024) {
+                this.closeAllSidebars();
+            }
+        });
+
+        document.getElementById('my-schedule-btn')?.addEventListener('click', async (e) => {
+            e.preventDefault();
+            await this.loadPage('my-schedule');
             if (window.innerWidth <= 1024) {
                 this.closeAllSidebars();
             }
@@ -994,6 +1012,24 @@ async loadSponsors() {
             localStorage.setItem('conference_profile', JSON.stringify(this.userProfile));
         }
     },
+
+    loadContactCardsFromLocal() {
+        const saved = localStorage.getItem('conference_contact_cards');
+        this.contactCards = saved ? JSON.parse(saved) : [];
+    },
+
+    saveContactCardsToLocal() {
+        localStorage.setItem('conference_contact_cards', JSON.stringify(this.contactCards));
+    },
+
+    loadMyScheduleFromLocal() {
+        const saved = localStorage.getItem('conference_my_schedule');
+        this.myScheduleItems = saved ? JSON.parse(saved) : [];
+    },
+
+    saveMyScheduleToLocal() {
+        localStorage.setItem('conference_my_schedule', JSON.stringify(this.myScheduleItems));
+    },
     
     updateProfilePreview() {
         const authSection = document.getElementById('auth-section');
@@ -1076,6 +1112,14 @@ async loadSponsors() {
             case 'profile':
                 contentDiv.innerHTML = this.renderProfile();
                 this.setupProfileEvents();
+                break;
+            case 'my-schedule':
+                contentDiv.innerHTML = this.renderMySchedule();
+                this.setupMyScheduleEvents();
+                break;
+            case 'card-manager':
+                contentDiv.innerHTML = this.renderCardManager();
+                this.setupCardManagerEvents();
                 break;
             case 'share':
                 contentDiv.innerHTML = this.renderShare();
@@ -1254,6 +1298,7 @@ async loadSponsors() {
                     this.loadTopics(),
                     this.loadSponsors()
                 ]);
+                this.processPendingCardImport();
                 // updateProfilePreview() 由 onAuthStateChange 事件处理
                 await this.loadPage('home');
             }, 1000);
@@ -1390,14 +1435,16 @@ async loadSponsors() {
 
 // 在 renderHome() 方法中，更新赞助商部分
 renderHome() {
-    // 动态生成6个功能模块（已删除"首页"和"分享会议"）
+    // 动态生成功能模块
     const modules = [
         { page: 'experts', icon: 'fa-user-md', label: '专家库' },
         { page: 'schedule', icon: 'fa-calendar-alt', label: '会议日程' },
         { page: 'gallery', icon: 'fa-images', label: '会议内容' },
         { page: 'forum', icon: 'fa-comments', label: '学术论坛' },
         { page: 'sponsors', icon: 'fa-handshake', label: '赞助商' },
-        { page: 'profile', icon: 'fa-id-card', label: '我的名片' }
+        { page: 'profile', icon: 'fa-id-card', label: '我的名片' },
+        { page: 'my-schedule', icon: 'fa-calendar-check', label: '我的日程' },
+        { page: 'card-manager', icon: 'fa-address-book', label: '名片管理' }
     ];
     
     const moduleHTML = modules.map(m => `
@@ -1828,6 +1875,8 @@ formatTime(dateTime) {
         const bio = this.userProfile ? this.userProfile.bio : '';
         const contact = this.userProfile ? this.userProfile.contact : '';
         const firstChar = name ? name.charAt(0) : '👤';
+        const profileShareUrl = this.getProfileShareUrl();
+        const profileQrUrl = this.getQrImageUrl(profileShareUrl);
         
         return `
             <div class="page-card">
@@ -1978,6 +2027,16 @@ formatTime(dateTime) {
                             ">
                                 <i class="fas fa-share-alt"></i> 分享名片
                             </button>
+
+                            <div style="margin-top: 16px; padding: 14px; background: #f8fbff; border-radius: 10px; border: 1px solid #d9ecff; text-align: center;">
+                                <div style="font-size: 14px; color: #0066cc; font-weight: 600; margin-bottom: 10px;">
+                                    <i class="fas fa-qrcode"></i> 微信扫码添加名片
+                                </div>
+                                <img src="${profileQrUrl}" alt="名片二维码" style="width: 180px; height: 180px; border-radius: 8px; background: white; padding: 8px;">
+                                <div style="font-size: 12px; color: #666; margin-top: 8px; line-height: 1.5;">
+                                    对方扫码后将打开页面并自动导入到名片管理
+                                </div>
+                            </div>
                         ` : ''}
                     </div>
                 </div>
@@ -1995,31 +2054,190 @@ formatTime(dateTime) {
     },
 
     showMySchedule() {
-        this.currentPage = 'my-schedule';
-        const contentDiv = document.getElementById('page-content');
-        contentDiv.innerHTML = `
+        this.loadPage('my-schedule');
+    },
+
+    renderMySchedule() {
+        const items = [...this.myScheduleItems].sort((a, b) => {
+            const timeA = `${a.date || ''} ${a.time || ''}`;
+            const timeB = `${b.date || ''} ${b.time || ''}`;
+            return timeA.localeCompare(timeB);
+        });
+
+        return `
             <div class="page-card">
                 <h1 class="page-title">
                     <i class="fas fa-calendar-check"></i>我的会议日程
                 </h1>
-                <div style="text-align: center; padding: 40px 20px;">
-                    <div style="font-size: 4rem; color: #0066cc; margin-bottom: 20px;">
-                        <i class="fas fa-calendar-plus"></i>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1100px; margin: 0 auto;">
+                    <div>
+                        <h3 style="color: #0066cc; margin-bottom: 16px;">新增日程</h3>
+                        <form id="my-schedule-form">
+                            <div class="form-group">
+                                <label for="my-schedule-title">日程标题</label>
+                                <input id="my-schedule-title" type="text" class="form-control" placeholder="如：心血管专场" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="my-schedule-date">日期</label>
+                                <input id="my-schedule-date" type="date" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="my-schedule-time">时间</label>
+                                <input id="my-schedule-time" type="time" class="form-control" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="my-schedule-location">地点</label>
+                                <input id="my-schedule-location" type="text" class="form-control" placeholder="如：A3会议厅">
+                            </div>
+                            <div class="form-group">
+                                <label for="my-schedule-note">备注</label>
+                                <textarea id="my-schedule-note" class="form-control" placeholder="可选" style="height: 90px;"></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">
+                                <i class="fas fa-plus"></i> 添加到我的日程
+                            </button>
+                        </form>
                     </div>
-                    <h2 style="color: #333; margin-bottom: 15px;">个人日程管理</h2>
-                    <p style="color: #666; line-height: 1.6; max-width: 600px; margin: 0 auto 30px;">
-                        您可以在此处管理您关注的会议日程，设置提醒，并查看您已安排的活动。
-                    </p>
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 30px;">
-                        <h3 style="color: #333; margin-bottom: 15px;">功能即将上线</h3>
-                        <p style="color: #666;">个人日程管理功能正在开发中，敬请期待！</p>
+
+                    <div>
+                        <h3 style="color: #0066cc; margin-bottom: 16px;">我的日程列表</h3>
+                        <div id="my-schedule-list" style="display: flex; flex-direction: column; gap: 12px;">
+                            ${items.length ? items.map(item => `
+                                <div style="background: #f8f9fa; border: 1px solid #e8eef5; border-radius: 10px; padding: 14px;">
+                                    <div style="display: flex; justify-content: space-between; gap: 10px; align-items: flex-start;">
+                                        <div>
+                                            <div style="font-weight: 700; color: #333;">${item.title}</div>
+                                            <div style="font-size: 13px; color: #0066cc; margin-top: 6px;">
+                                                <i class="fas fa-clock"></i> ${item.date || '-'} ${item.time || ''}
+                                            </div>
+                                            ${item.location ? `<div style="font-size: 13px; color: #666; margin-top: 4px;"><i class="fas fa-map-marker-alt"></i> ${item.location}</div>` : ''}
+                                            ${item.note ? `<div style="font-size: 13px; color: #777; margin-top: 6px;">${item.note}</div>` : ''}
+                                        </div>
+                                        <button class="btn btn-secondary delete-my-schedule-item" data-id="${item.id}" style="padding: 6px 10px; font-size: 12px;">
+                                            <i class="fas fa-trash"></i> 删除
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('') : '<div style="color: #777; background: #f8f9fa; border-radius: 10px; padding: 18px;">暂无日程，请先添加。</div>'}
+                        </div>
                     </div>
+                </div>
+
+                <style>
+                    @media (max-width: 900px) {
+                        div[style*="grid-template-columns: 1fr 1fr"] {
+                            grid-template-columns: 1fr !important;
+                        }
+                    }
+                </style>
+            </div>
+        `;
+    },
+
+    setupMyScheduleEvents() {
+        const form = document.getElementById('my-schedule-form');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const item = {
+                    id: Date.now().toString(),
+                    title: document.getElementById('my-schedule-title').value.trim(),
+                    date: document.getElementById('my-schedule-date').value,
+                    time: document.getElementById('my-schedule-time').value,
+                    location: document.getElementById('my-schedule-location').value.trim(),
+                    note: document.getElementById('my-schedule-note').value.trim(),
+                    created_at: new Date().toISOString()
+                };
+
+                if (!item.title || !item.date || !item.time) {
+                    this.showNotification('请完整填写标题、日期和时间', 'warning');
+                    return;
+                }
+
+                this.myScheduleItems.push(item);
+                this.saveMyScheduleToLocal();
+                this.showNotification('已添加到我的日程', 'success');
+                this.loadPage('my-schedule');
+            });
+        }
+
+        document.querySelectorAll('.delete-my-schedule-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                this.myScheduleItems = this.myScheduleItems.filter(item => item.id !== id);
+                this.saveMyScheduleToLocal();
+                this.loadPage('my-schedule');
+            });
+        });
+    },
+
+    renderCardManager() {
+        const cards = [...this.contactCards].sort((a, b) => new Date(b.added_at) - new Date(a.added_at));
+
+        return `
+            <div class="page-card">
+                <h1 class="page-title">
+                    <i class="fas fa-address-book"></i>名片管理
+                </h1>
+
+                <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 20px;">
+                    <div style="color: #666;">已保存名片：<strong style="color: #0066cc;">${cards.length}</strong> 张</div>
+                    <button id="import-card-link-btn" class="btn btn-primary" style="padding: 8px 14px;">
+                        <i class="fas fa-link"></i> 从分享链接导入
+                    </button>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+                    ${cards.length ? cards.map(card => `
+                        <div style="background: linear-gradient(135deg, #f7fbff, #eef6ff); border: 1px solid #d6e8ff; border-radius: 12px; padding: 16px;">
+                            <div style="font-size: 18px; font-weight: 700; color: #0066cc;">${card.full_name || '未命名'}</div>
+                            <div style="margin-top: 8px; font-size: 14px; color: #555; line-height: 1.7;">
+                                <div><strong>职位：</strong>${card.title || '-'}</div>
+                                <div><strong>科室：</strong>${card.department || '-'}</div>
+                                <div><strong>医院：</strong>${card.hospital || '-'}</div>
+                                <div><strong>联系方式：</strong>${card.contact || '-'}</div>
+                            </div>
+                            ${card.bio ? `<div style="margin-top: 8px; font-size: 12px; color: #777;">${card.bio}</div>` : ''}
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px;">
+                                <div style="font-size: 12px; color: #999;">添加于 ${new Date(card.added_at).toLocaleString('zh-CN')}</div>
+                                <button class="btn btn-secondary remove-contact-card" data-id="${card.card_id}" style="padding: 5px 8px; font-size: 12px;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : '<div style="padding: 20px; border-radius: 10px; background: #f8f9fa; color: #666;">暂无名片，先让对方微信扫码你的名片二维码，或使用分享链接导入。</div>'}
                 </div>
             </div>
         `;
-        
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.classList.remove('active');
+    },
+
+    setupCardManagerEvents() {
+        const importBtn = document.getElementById('import-card-link-btn');
+        if (importBtn) {
+            importBtn.addEventListener('click', async () => {
+                const input = prompt('请粘贴名片分享链接：');
+                if (!input) return;
+                const payload = this.extractCardPayloadFromUrl(input.trim());
+                if (!payload) {
+                    this.showNotification('链接无效，请确认是名片分享链接', 'warning');
+                    return;
+                }
+                const imported = this.addContactCard(payload);
+                if (imported) {
+                    this.showNotification('名片已导入', 'success');
+                    await this.loadPage('card-manager');
+                }
+            });
+        }
+
+        document.querySelectorAll('.remove-contact-card').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                this.contactCards = this.contactCards.filter(card => card.card_id !== id);
+                this.saveContactCardsToLocal();
+                this.loadPage('card-manager');
+            });
         });
     },
 
@@ -2247,13 +2465,13 @@ formatTime(dateTime) {
     },
     
     shareProfile() {
-        if (!this.userProfile) {
+        const profilePayload = this.getProfileCardPayload();
+        if (!profilePayload) {
             alert('请先创建名片');
             return;
         }
-        
-        const profileData = encodeURIComponent(JSON.stringify(this.userProfile));
-        const shareUrl = `${window.location.origin}${window.location.pathname}#profile-share-${profileData}`;
+
+        const shareUrl = this.getProfileShareUrl();
         
         navigator.clipboard.writeText(shareUrl)
             .then(() => {
@@ -2262,6 +2480,120 @@ formatTime(dateTime) {
             .catch(err => {
                 alert(`请复制以下链接分享给其他参会者：\n\n${shareUrl}`);
             });
+    },
+
+    getProfileCardPayload() {
+        if (!this.userProfile) return null;
+        const name = this.userProfile.full_name || '';
+        if (!name.trim()) return null;
+
+        const uid = this.currentUser?.id || 'local-user';
+        return {
+            card_id: `${uid}-${Date.now()}`,
+            full_name: name,
+            title: this.userProfile.title || '',
+            department: this.userProfile.department || '',
+            hospital: this.userProfile.hospital || '',
+            bio: this.userProfile.bio || '',
+            contact: this.userProfile.contact || '',
+            avatar: this.userProfile.avatar || name.charAt(0) || '医',
+            owner_id: uid,
+            shared_at: new Date().toISOString()
+        };
+    },
+
+    getProfileShareUrl() {
+        const payload = this.getProfileCardPayload();
+        if (!payload) return window.location.href;
+        const encoded = this.encodeCardPayload(payload);
+        return `${window.location.origin}${window.location.pathname}#add-card=${encoded}`;
+    },
+
+    getQrImageUrl(shareUrl) {
+        return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(shareUrl)}`;
+    },
+
+    encodeCardPayload(payload) {
+        const json = JSON.stringify(payload);
+        return btoa(unescape(encodeURIComponent(json)));
+    },
+
+    decodeCardPayload(encoded) {
+        try {
+            const json = decodeURIComponent(escape(atob(encoded)));
+            return JSON.parse(json);
+        } catch (error) {
+            return null;
+        }
+    },
+
+    extractCardPayloadFromUrl(url) {
+        try {
+            const parsed = new URL(url);
+            const hash = parsed.hash || '';
+            if (!hash.startsWith('#add-card=')) return null;
+            const encoded = hash.replace('#add-card=', '').trim();
+            return this.decodeCardPayload(encoded);
+        } catch (error) {
+            return null;
+        }
+    },
+
+    addContactCard(payload) {
+        if (!payload || !payload.full_name) return false;
+
+        const exists = this.contactCards.some(card => card.card_id === payload.card_id);
+        if (exists) return true;
+
+        this.contactCards.unshift({
+            ...payload,
+            added_at: new Date().toISOString()
+        });
+        this.saveContactCardsToLocal();
+        return true;
+    },
+
+    handleIncomingCardFromHash() {
+        const hash = window.location.hash || '';
+        if (!hash.startsWith('#add-card=')) return;
+
+        const encoded = hash.replace('#add-card=', '').trim();
+        const payload = this.decodeCardPayload(encoded);
+
+        const cleanUrl = `${window.location.origin}${window.location.pathname}${window.location.search || ''}`;
+        window.history.replaceState(null, '', cleanUrl);
+
+        if (!payload) {
+            this.showNotification('名片二维码内容无效', 'warning');
+            return;
+        }
+
+        if (!this.currentUser) {
+            localStorage.setItem('conference_pending_card_import', JSON.stringify(payload));
+            this.showNotification('请先登录，登录后将自动导入该名片', 'info');
+            return;
+        }
+
+        if (this.addContactCard(payload)) {
+            this.showNotification('名片已自动导入到名片管理', 'success');
+        }
+    },
+
+    processPendingCardImport() {
+        if (!this.currentUser) return;
+
+        const pending = localStorage.getItem('conference_pending_card_import');
+        if (!pending) return;
+
+        try {
+            const payload = JSON.parse(pending);
+            if (this.addContactCard(payload)) {
+                this.showNotification('已导入待处理名片', 'success');
+            }
+            localStorage.removeItem('conference_pending_card_import');
+        } catch (error) {
+            localStorage.removeItem('conference_pending_card_import');
+        }
     },
     
     renderGallery() {
