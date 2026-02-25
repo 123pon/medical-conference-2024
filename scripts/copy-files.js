@@ -22,6 +22,25 @@ function resolveCommitHash() {
     }
 }
 
+async function applyCacheBusting(versionTag) {
+    const htmlFiles = ['index.html', 'check-data-source.html'];
+
+    for (const fileName of htmlFiles) {
+        const filePath = path.join(targetDir, fileName);
+        if (!(await fs.pathExists(filePath))) {
+            continue;
+        }
+
+        let content = await fs.readFile(filePath, 'utf8');
+
+        content = content.replace(/css\/style\.css(\?v=[^"']+)?/g, `css/style.css?v=${versionTag}`);
+        content = content.replace(/\.\/js\/main\.js(\?v=[^"']+)?/g, `./js/main.js?v=${versionTag}`);
+        content = content.replace(/js\/main\.js(\?v=[^"']+)?/g, `js/main.js?v=${versionTag}`);
+
+        await fs.writeFile(filePath, content, 'utf8');
+    }
+}
+
 // 源目录（项目根目录）
 const sourceDir = path.join(__dirname, '..');
 // 目标目录（输出目录）
@@ -186,6 +205,9 @@ async function copyFiles() {
         const versionFilePath = path.join(targetDir, 'version.json');
         await fs.writeJson(versionFilePath, versionInfo, { spaces: 2 });
         console.log(`✅ 已生成: version.json      (${commitHash})`);
+
+        await applyCacheBusting(commitHash);
+        console.log(`✅ 已处理: 静态资源缓存版本  (${commitHash})`);
 
         // 统计部署信息
         const stats = await getDeploymentStats(targetDir);
