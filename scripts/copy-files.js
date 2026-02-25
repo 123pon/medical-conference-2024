@@ -3,6 +3,25 @@ const fs = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
 
+function resolveCommitHash() {
+    try {
+        return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+    } catch (error) {
+        const candidates = [
+            process.env.CNB_COMMIT,
+            process.env.CI_COMMIT_SHA,
+            process.env.GITHUB_SHA,
+            process.env.GIT_COMMIT
+        ].filter(Boolean);
+
+        if (candidates.length > 0) {
+            return String(candidates[0]).slice(0, 7);
+        }
+
+        return 'unknown';
+    }
+}
+
 // 源目录（项目根目录）
 const sourceDir = path.join(__dirname, '..');
 // 目标目录（输出目录）
@@ -158,7 +177,7 @@ async function copyFiles() {
         }
 
         // 统计部署信息
-        const commitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+        const commitHash = resolveCommitHash();
         const versionInfo = {
             commit: commitHash,
             buildTime: new Date().toISOString(),
