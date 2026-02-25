@@ -1,6 +1,7 @@
 // scripts/copy-files.js
 const fs = require('fs-extra');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // 源目录（项目根目录）
 const sourceDir = path.join(__dirname, '..');
@@ -157,6 +158,17 @@ async function copyFiles() {
         }
 
         // 统计部署信息
+        const commitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+        const versionInfo = {
+            commit: commitHash,
+            buildTime: new Date().toISOString(),
+            app: 'medical-conference-2024'
+        };
+        const versionFilePath = path.join(targetDir, 'version.json');
+        await fs.writeJson(versionFilePath, versionInfo, { spaces: 2 });
+        console.log(`✅ 已生成: version.json      (${commitHash})`);
+
+        // 统计部署信息
         const stats = await getDeploymentStats(targetDir);
         
         console.log(`\n${'='.repeat(60)}`);
@@ -171,6 +183,7 @@ async function copyFiles() {
 
         console.log(`🎉 构建完成！所有文件已复制到 dist 目录`);
         console.log(`📤 现在可以将 dist/ 目录部署到云服务器\n`);
+        console.log(`🔎 部署后可访问 /version.json 验证线上版本\n`);
     } catch (err) {
         console.error('❌ 构建过程中发生错误:', err);
         process.exit(1);
