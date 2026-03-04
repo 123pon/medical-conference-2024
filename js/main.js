@@ -9,6 +9,8 @@ const AppState = {
     contactCards: [],
     myScheduleItems: [],
     researchForms: {},
+    researchRecords: [],
+    currentResearchRecordId: '',
     researchActiveStage: 'd0',
     sidebarCollapsed: true,
     rightSidebarCollapsed: true,
@@ -37,6 +39,7 @@ const AppState = {
     this.loadContactCardsFromLocal();
     this.loadMyScheduleFromLocal();
     this.loadResearchFormsFromLocal();
+    this.loadResearchRecordsFromLocal();
     
     // 初始化数据
     this.setupAppUtilities();
@@ -1049,6 +1052,58 @@ async loadSponsors() {
     saveResearchFormsToLocal() {
         localStorage.setItem('conference_research_forms', JSON.stringify(this.researchForms));
     },
+
+    loadResearchRecordsFromLocal() {
+        const saved = localStorage.getItem('conference_research_records');
+        this.researchRecords = saved ? JSON.parse(saved) : [];
+    },
+
+    saveResearchRecordsToLocal() {
+        localStorage.setItem('conference_research_records', JSON.stringify(this.researchRecords));
+    },
+
+    createResearchRecordId() {
+        const timestamp = Date.now().toString().slice(-8);
+        return `ECCI-${timestamp}`;
+    },
+
+    getDefaultResearchForms() {
+        return {
+            d0: {},
+            d1: {},
+            d3: {},
+            d5: {},
+            followup: {}
+        };
+    },
+
+    loadResearchRecordById(recordId) {
+        const target = this.researchRecords.find(item => item.recordId === recordId);
+        if (!target) return false;
+        this.currentResearchRecordId = target.recordId;
+        this.researchForms = { ...this.getDefaultResearchForms(), ...target.data };
+        this.saveResearchFormsToLocal();
+        return true;
+    },
+
+    upsertResearchRecord(recordId) {
+        const normalizedId = String(recordId || '').trim();
+        if (!normalizedId) return false;
+        const payload = {
+            recordId: normalizedId,
+            updatedAt: new Date().toISOString(),
+            data: this.researchForms
+        };
+        const index = this.researchRecords.findIndex(item => item.recordId === normalizedId);
+        if (index >= 0) {
+            this.researchRecords[index] = payload;
+        } else {
+            this.researchRecords.push(payload);
+        }
+        this.currentResearchRecordId = normalizedId;
+        this.saveResearchRecordsToLocal();
+        return true;
+    },
     
     updateProfilePreview() {
         const authSection = document.getElementById('auth-section');
@@ -1560,12 +1615,20 @@ getClinicalResearchStages() {
                 { name: 'site_name', label: '调查单位/中心', type: 'text', required: true, placeholder: '例如：北京某三甲医院 EICU' },
                 { name: 'patient_code', label: '患者编号', type: 'text', required: true, placeholder: '例如：ECCI-BJ-0001' },
                 { name: 'admission_time', label: '入院时间', type: 'datetime-local', required: true },
+                { name: 'gender', label: '性别', type: 'select', required: true, options: ['男', '女'] },
+                { name: 'birth_date', label: '出生日期', type: 'date' },
                 { name: 'admission_path', label: '入院途径', type: 'select', options: ['社区转诊', '外院转诊', '院内转诊', '自行来院', '其他'] },
                 { name: 'department', label: '收治科室', type: 'select', options: ['急诊/EICU', '综合ICU', '专科病房'] },
                 { name: 'primary_diagnosis', label: '本次入院主病种', type: 'select', required: true, options: ['脑卒中', '呼吸衰竭', '恶性肿瘤', '脓毒症/感染', '心衰', '创伤', '其他'] },
+                { name: 'height_cm', label: '身高', type: 'number', unit: 'cm', placeholder: '例如：170' },
+                { name: 'weight_kg', label: '体重', type: 'number', unit: 'kg', placeholder: '例如：65' },
+                { name: 'bmi', label: 'BMI', type: 'number', unit: 'kg/m²', placeholder: '例如：22.5' },
+                { name: 'sbp', label: '收缩压', type: 'number', unit: 'mmHg', placeholder: '例如：128' },
+                { name: 'dbp', label: '舒张压', type: 'number', unit: 'mmHg', placeholder: '例如：74' },
+                { name: 'temperature', label: '体温', type: 'number', unit: '℃', placeholder: '例如：37.8' },
+                { name: 'heart_rate', label: '心率', type: 'number', unit: '次/分', placeholder: '例如：102' },
                 { name: 'history_comorbidity', label: '既往史与并发症', type: 'textarea', placeholder: '例如：高血压10年、2型糖尿病5年、COPD...' },
                 { name: 'medication_history', label: '长期用药史', type: 'textarea', placeholder: '例如：二甲双胍、ACEI、β受体阻滞剂...' },
-                { name: 'vitals', label: '生命体征', type: 'text', unit: 'mmHg / 次/分 / ℃', placeholder: '例如：BP 128/74 mmHg，HR 102次/分，T 37.8℃' },
                 { name: 'd0_notes', label: 'D0备注', type: 'textarea', placeholder: '补充病情说明与特殊情况' }
             ]
         },
@@ -1573,12 +1636,28 @@ getClinicalResearchStages() {
             title: 'D1 入院后第1天',
             subtitle: '首次检验/检查采集',
             fields: [
-                { name: 'abg_summary', label: '动脉血气摘要', type: 'text', required: true, unit: 'mmHg / mmol/L', placeholder: '例如：pH 7.35, PaO2 78, PaCO2 42, Lac 2.1' },
-                { name: 'biochem_summary', label: '生化摘要', type: 'textarea', required: true, unit: 'mmol/L / μmol/L', placeholder: '例如：Cr、BUN、Alb、TBil 等关键指标' },
-                { name: 'cbc_summary', label: '血常规摘要', type: 'text', required: true, unit: '10^9/L / g/L', placeholder: '例如：WBC 12.3, Hb 108, PLT 186' },
-                { name: 'coag_summary', label: '凝血摘要', type: 'text', unit: 's / mg/L', placeholder: '例如：INR 1.2, APTT 36, D-Dimer 1.8' },
-                { name: 'infection_markers', label: '感染炎症指标', type: 'text', unit: 'mg/L / ng/mL', placeholder: '例如：CRP、PCT、IL-6' },
-                { name: 'support_therapy', label: '器官支持治疗', type: 'textarea', placeholder: '机械通气/CRRT/血管活性药等起止与参数' },
+                { name: 'abg_ph', label: 'pH', type: 'number', required: true, unit: '-', placeholder: '例如：7.35' },
+                { name: 'abg_pao2', label: 'PaO2', type: 'number', required: true, unit: 'mmHg', placeholder: '例如：78' },
+                { name: 'abg_paco2', label: 'PaCO2', type: 'number', required: true, unit: 'mmHg', placeholder: '例如：42' },
+                { name: 'abg_hco3', label: 'HCO3-', type: 'number', unit: 'mmol/L', placeholder: '例如：24' },
+                { name: 'lactate', label: '乳酸', type: 'number', unit: 'mmol/L', placeholder: '例如：2.1' },
+                { name: 'wbc', label: 'WBC', type: 'number', required: true, unit: '10^9/L', placeholder: '例如：12.3' },
+                { name: 'hb', label: 'Hb', type: 'number', unit: 'g/L', placeholder: '例如：108' },
+                { name: 'plt', label: 'PLT', type: 'number', unit: '10^9/L', placeholder: '例如：186' },
+                { name: 'crp', label: 'CRP', type: 'number', unit: 'mg/L', placeholder: '例如：56' },
+                { name: 'pct', label: 'PCT', type: 'number', unit: 'ng/mL', placeholder: '例如：1.8' },
+                { name: 'inr', label: 'INR', type: 'number', unit: '-', placeholder: '例如：1.2' },
+                { name: 'aptt', label: 'APTT', type: 'number', unit: 's', placeholder: '例如：36' },
+                { name: 'ddimer', label: 'D-Dimer', type: 'number', unit: 'mg/L', placeholder: '例如：1.8' },
+                { name: 'creatinine', label: '肌酐', type: 'number', unit: 'μmol/L', placeholder: '例如：110' },
+                { name: 'albumin', label: '白蛋白', type: 'number', unit: 'g/L', placeholder: '例如：32' },
+                { name: 'tbil', label: '总胆红素', type: 'number', unit: 'μmol/L', placeholder: '例如：18' },
+                { name: 'fluid_in', label: '液体入量', type: 'number', unit: 'mL', placeholder: '例如：2500' },
+                { name: 'fluid_out', label: '液体出量', type: 'number', unit: 'mL', placeholder: '例如：1800' },
+                { name: 'urine_output', label: '尿量', type: 'number', unit: 'mL', placeholder: '例如：1200' },
+                { name: 'mv_status', label: '机械通气', type: 'select', options: ['未使用', '无创', '有创'] },
+                { name: 'crrt_status', label: 'CRRT', type: 'select', options: ['否', '是'] },
+                { name: 'support_therapy', label: '器官支持治疗补充说明', type: 'textarea', placeholder: '机械通气模式、CRRT参数、血管活性药等' },
                 { name: 'imaging_result', label: '影像学结果', type: 'textarea', placeholder: 'CT/MRI/超声关键结论' }
             ]
         },
@@ -1586,10 +1665,21 @@ getClinicalResearchStages() {
             title: 'D3 入院后第3天',
             subtitle: '动态复评与治疗调整',
             fields: [
-                { name: 'trend_changes', label: '关键指标趋势', type: 'textarea', required: true, placeholder: '与D1相比的变化（改善/恶化）' },
-                { name: 'complications', label: '并发症记录', type: 'text', placeholder: '出血/血栓/AKI/ARDS等' },
-                { name: 'pathogen_result', label: '病原学结果', type: 'textarea', placeholder: '培养阳性、耐药情况、NGS结果' },
-                { name: 'treatment_adjustment', label: '治疗调整', type: 'textarea', required: true, placeholder: '抗感染方案、通气模式、补液策略调整' },
+                { name: 'd3_ph', label: 'pH（D3）', type: 'number', unit: '-', placeholder: '例如：7.38' },
+                { name: 'd3_pao2', label: 'PaO2（D3）', type: 'number', unit: 'mmHg', placeholder: '例如：86' },
+                { name: 'd3_paco2', label: 'PaCO2（D3）', type: 'number', unit: 'mmHg', placeholder: '例如：39' },
+                { name: 'd3_lactate', label: '乳酸（D3）', type: 'number', unit: 'mmol/L', placeholder: '例如：1.6' },
+                { name: 'd3_wbc', label: 'WBC（D3）', type: 'number', unit: '10^9/L', placeholder: '例如：9.8' },
+                { name: 'd3_crp', label: 'CRP（D3）', type: 'number', unit: 'mg/L', placeholder: '例如：28' },
+                { name: 'd3_pct', label: 'PCT（D3）', type: 'number', unit: 'ng/mL', placeholder: '例如：0.7' },
+                { name: 'd3_inr', label: 'INR（D3）', type: 'number', unit: '-', placeholder: '例如：1.1' },
+                { name: 'd3_aptt', label: 'APTT（D3）', type: 'number', unit: 's', placeholder: '例如：33' },
+                { name: 'd3_creatinine', label: '肌酐（D3）', type: 'number', unit: 'μmol/L', placeholder: '例如：98' },
+                { name: 'd3_complications', label: '并发症记录', type: 'textarea', placeholder: '出血/血栓/AKI/ARDS等，若无请填写“无”' },
+                { name: 'd3_pathogen_result', label: '病原学结果', type: 'textarea', placeholder: '培养结果、耐药信息、NGS结果' },
+                { name: 'd3_mv_status', label: '机械通气（D3）', type: 'select', options: ['未使用', '无创', '有创'] },
+                { name: 'd3_crrt_status', label: 'CRRT（D3）', type: 'select', options: ['否', '是'] },
+                { name: 'treatment_adjustment', label: '治疗调整', type: 'textarea', required: true, placeholder: '抗感染方案、通气参数、补液/升压方案调整' },
                 { name: 'd3_notes', label: 'D3备注', type: 'textarea' }
             ]
         },
@@ -1597,8 +1687,16 @@ getClinicalResearchStages() {
             title: 'D5 入院后第5天',
             subtitle: '阶段疗效评估',
             fields: [
-                { name: 'organ_support_status', label: '器官支持状态', type: 'text', placeholder: '是否仍需MV/CRRT/升压药' },
-                { name: 'infection_control', label: '感染控制情况', type: 'text', placeholder: '炎症指标变化与控制评估' },
+                { name: 'd5_ph', label: 'pH（D5）', type: 'number', unit: '-', placeholder: '例如：7.40' },
+                { name: 'd5_pao2', label: 'PaO2（D5）', type: 'number', unit: 'mmHg', placeholder: '例如：92' },
+                { name: 'd5_paco2', label: 'PaCO2（D5）', type: 'number', unit: 'mmHg', placeholder: '例如：37' },
+                { name: 'd5_lactate', label: '乳酸（D5）', type: 'number', unit: 'mmol/L', placeholder: '例如：1.2' },
+                { name: 'd5_wbc', label: 'WBC（D5）', type: 'number', unit: '10^9/L', placeholder: '例如：8.1' },
+                { name: 'd5_crp', label: 'CRP（D5）', type: 'number', unit: 'mg/L', placeholder: '例如：12' },
+                { name: 'd5_pct', label: 'PCT（D5）', type: 'number', unit: 'ng/mL', placeholder: '例如：0.3' },
+                { name: 'd5_creatinine', label: '肌酐（D5）', type: 'number', unit: 'μmol/L', placeholder: '例如：90' },
+                { name: 'organ_support_status', label: '器官支持状态', type: 'select', options: ['无需支持', '仅氧疗', '无创通气', '有创通气', 'CRRT', '升压药支持'] },
+                { name: 'infection_control', label: '感染控制情况', type: 'textarea', placeholder: '炎症指标变化、感染灶控制与抗菌方案评价' },
                 { name: 'overall_assessment', label: '阶段综合评估', type: 'textarea', required: true, placeholder: '病情演变、下一步计划' },
                 { name: 'd5_notes', label: 'D5备注', type: 'textarea' }
             ]
@@ -1610,7 +1708,12 @@ getClinicalResearchStages() {
                 { name: 'followup_date', label: '随访日期', type: 'date', required: true },
                 { name: 'survival_status', label: '生存状态', type: 'select', required: true, options: ['生存', '死亡', '失访'] },
                 { name: 'readmission', label: '是否再入院', type: 'select', options: ['否', '是'] },
-                { name: 'functional_status', label: '功能状态/生活能力', type: 'textarea', placeholder: 'ECOG/PS或日常活动能力描述' },
+                { name: 'readmission_count', label: '再入院次数', type: 'number', unit: '次', placeholder: '例如：0' },
+                { name: 'followup_ecog', label: 'ECOG评分', type: 'number', unit: '分', placeholder: '0-5' },
+                { name: 'followup_ps', label: 'PS评分', type: 'number', unit: '分', placeholder: '0-100' },
+                { name: 'followup_complications', label: '随访期并发事件', type: 'textarea', placeholder: '如再发感染、血栓、再插管等，若无请填写“无”' },
+                { name: 'medication_adherence', label: '用药依从性', type: 'select', options: ['好', '一般', '差', '未知'] },
+                { name: 'functional_status', label: '功能状态/生活能力', type: 'textarea', placeholder: 'ADL变化、独立行走/卧床情况等' },
                 { name: 'followup_notes', label: '随访备注', type: 'textarea' }
             ]
         }
@@ -1637,6 +1740,10 @@ highlightResearchMissingFields(form, missingFields) {
     missingFields.forEach(field => {
         const container = form.querySelector(`[data-field-container="${field.name}"]`);
         if (!container) return;
+        const details = container.closest('details');
+        if (details) {
+            details.open = true;
+        }
         container.style.background = '#fff7f7';
         const input = container.querySelector('[name]');
         if (input) {
@@ -1645,13 +1752,61 @@ highlightResearchMissingFields(form, missingFields) {
     });
 },
 
+getResearchFieldGroup(stageKey, fieldName) {
+    const bloodGas = ['abg_ph', 'abg_pao2', 'abg_paco2', 'abg_hco3', 'lactate', 'd3_ph', 'd3_pao2', 'd3_paco2', 'd3_lactate', 'd5_ph', 'd5_pao2', 'd5_paco2', 'd5_lactate'];
+    const biochem = ['creatinine', 'albumin', 'tbil', 'd3_creatinine', 'd5_creatinine', 'height_cm', 'weight_kg', 'bmi'];
+    const infection = ['crp', 'pct', 'd3_crp', 'd3_pct', 'd5_crp', 'd5_pct', 'd3_pathogen_result', 'infection_control', 'followup_complications'];
+    const coag = ['inr', 'aptt', 'ddimer', 'd3_inr', 'd3_aptt'];
+    const support = ['mv_status', 'crrt_status', 'd3_mv_status', 'd3_crrt_status', 'support_therapy', 'organ_support_status', 'fluid_in', 'fluid_out', 'urine_output'];
+
+    if (stageKey === 'd0') {
+        if (['site_name', 'patient_code', 'admission_time', 'gender', 'birth_date', 'admission_path', 'department', 'primary_diagnosis'].includes(fieldName)) return '基本信息';
+        if (['sbp', 'dbp', 'temperature', 'heart_rate'].includes(fieldName)) return '生命体征';
+        if (['history_comorbidity', 'medication_history', 'd0_notes'].includes(fieldName)) return '病史与备注';
+    }
+
+    if (bloodGas.includes(fieldName)) return '血气';
+    if (biochem.includes(fieldName)) return '生化';
+    if (infection.includes(fieldName)) return '感染';
+    if (coag.includes(fieldName)) return '凝血';
+    if (support.includes(fieldName)) return '器官支持';
+
+    if (['wbc', 'hb', 'plt', 'd3_wbc', 'd5_wbc'].includes(fieldName)) return '血常规';
+    if (['imaging_result'].includes(fieldName)) return '影像学';
+    if (stageKey === 'followup') {
+        if (['followup_date', 'survival_status', 'readmission', 'readmission_count'].includes(fieldName)) return '随访结局';
+        if (['followup_ecog', 'followup_ps', 'functional_status', 'medication_adherence', 'followup_notes'].includes(fieldName)) return '功能与依从性';
+    }
+    if (['treatment_adjustment', 'overall_assessment', 'd3_notes', 'd5_notes'].includes(fieldName)) return '治疗评估';
+    if (['d3_complications'].includes(fieldName)) return '并发症';
+    return '其他';
+},
+
+groupResearchFields(stageKey, fields) {
+    const grouped = {};
+    fields.forEach(field => {
+        const groupName = this.getResearchFieldGroup(stageKey, field.name);
+        if (!grouped[groupName]) {
+            grouped[groupName] = [];
+        }
+        grouped[groupName].push(field);
+    });
+    return grouped;
+},
+
 renderClinicalResearch() {
     const stages = this.getClinicalResearchStages();
     const stageOrder = ['d0', 'd1', 'd3', 'd5', 'followup'];
     const activeStage = stages[this.researchActiveStage] ? this.researchActiveStage : 'd0';
     const activeConfig = stages[activeStage];
+    const recordIdValue = this.currentResearchRecordId || this.researchForms?.d0?.patient_code || '';
+    const sortedRecords = [...(this.researchRecords || [])].sort((left, right) => {
+        const leftTime = new Date(left.updatedAt || 0).getTime();
+        const rightTime = new Date(right.updatedAt || 0).getTime();
+        return rightTime - leftTime;
+    });
 
-    const stageRows = stageOrder.map((key, index) => {
+    const stageRows = stageOrder.map((key) => {
         const stage = stages[key];
         const isActive = activeStage === key;
         const filledCount = stage.fields.filter(field => {
@@ -1668,38 +1823,51 @@ renderClinicalResearch() {
         `;
     }).join('');
 
-    const formFields = activeConfig.fields.map(field => {
-        const value = (this.researchForms[activeStage] || {})[field.name] || '';
-        const requiredMark = field.required ? '<span style="color:#dc2626;">*</span>' : '';
-        const unitText = field.unit ? `<span style="font-size: 0.78rem; color: #64748b; font-weight: 500; margin-left: 8px;">单位：${field.unit}</span>` : '';
+    const grouped = this.groupResearchFields(activeStage, activeConfig.fields);
+    const groupEntries = Object.entries(grouped);
+    const formGroups = groupEntries.map(([groupName, groupFields], groupIndex) => {
+        const fieldNodes = groupFields.map(field => {
+            const value = (this.researchForms[activeStage] || {})[field.name] || '';
+            const requiredMark = field.required ? '<span style="color:#dc2626;">*</span>' : '';
+            const unitText = field.unit ? `<span style="font-size: 0.78rem; color: #64748b; font-weight: 500; margin-left: 8px;">单位：${field.unit}</span>` : '';
 
-        if (field.type === 'textarea') {
+            if (field.type === 'textarea') {
+                return `
+                    <div data-field-container="${field.name}" style="display: grid; gap: 6px; padding: 6px; border-radius: 8px; transition: all 0.2s; grid-column: 1 / -1;">
+                        <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}${unitText}</label>
+                        <textarea name="${field.name}" rows="3" placeholder="${field.placeholder || ''}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; resize: vertical;">${value}</textarea>
+                    </div>
+                `;
+            }
+
+            if (field.type === 'select') {
+                const options = (field.options || []).map(option => `<option value="${option}" ${value === option ? 'selected' : ''}>${option}</option>`).join('');
+                return `
+                    <div data-field-container="${field.name}" style="display: grid; gap: 6px; padding: 6px; border-radius: 8px; transition: all 0.2s;">
+                        <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}${unitText}</label>
+                        <select name="${field.name}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; background: white;">
+                            <option value="">请选择</option>
+                            ${options}
+                        </select>
+                    </div>
+                `;
+            }
+
             return `
                 <div data-field-container="${field.name}" style="display: grid; gap: 6px; padding: 6px; border-radius: 8px; transition: all 0.2s;">
                     <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}${unitText}</label>
-                    <textarea name="${field.name}" rows="3" placeholder="${field.placeholder || ''}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; resize: vertical;">${value}</textarea>
+                    <input type="${field.type || 'text'}" name="${field.name}" value="${value}" placeholder="${field.placeholder || ''}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem;" ${field.required ? 'required' : ''}>
                 </div>
             `;
-        }
-
-        if (field.type === 'select') {
-            const options = (field.options || []).map(option => `<option value="${option}" ${value === option ? 'selected' : ''}>${option}</option>`).join('');
-            return `
-                <div data-field-container="${field.name}" style="display: grid; gap: 6px; padding: 6px; border-radius: 8px; transition: all 0.2s;">
-                    <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}${unitText}</label>
-                    <select name="${field.name}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; background: white;">
-                        <option value="">请选择</option>
-                        ${options}
-                    </select>
-                </div>
-            `;
-        }
+        }).join('');
 
         return `
-            <div data-field-container="${field.name}" style="display: grid; gap: 6px; padding: 6px; border-radius: 8px; transition: all 0.2s;">
-                <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}${unitText}</label>
-                <input type="${field.type || 'text'}" name="${field.name}" value="${value}" placeholder="${field.placeholder || ''}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem;" ${field.required ? 'required' : ''}>
-            </div>
+            <details ${groupIndex === 0 ? 'open' : ''} style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; background: #fcfdff;">
+                <summary style="cursor: pointer; font-weight: 700; color: #1f3b64; padding: 6px 4px;">${groupName}（${groupFields.length}项）</summary>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; padding-top: 8px;">
+                    ${fieldNodes}
+                </div>
+            </details>
         `;
     }).join('');
 
@@ -1710,8 +1878,41 @@ renderClinicalResearch() {
                 <button class="btn btn-secondary" id="back-to-home" style="white-space: nowrap;"><i class="fas fa-arrow-left"></i> 返回首页</button>
             </div>
 
+            <div style="display: grid; grid-template-columns: 1fr auto auto auto auto auto; gap: 10px; align-items: center; margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;">
+                <input id="research-record-id" type="text" value="${recordIdValue}" placeholder="请输入唯一记录编号（如 ECCI-0001）" style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem;">
+                <button type="button" class="btn btn-secondary" id="research-search-btn"><i class="fas fa-search"></i> 编号检索</button>
+                <button type="button" class="btn btn-secondary" id="research-new-record-btn"><i class="fas fa-file-circle-plus"></i> 新建记录</button>
+                <button type="button" class="btn btn-secondary" id="research-record-list-btn"><i class="fas fa-table-list"></i> 记录列表</button>
+                <button type="button" class="btn btn-secondary" id="research-export-all-btn"><i class="fas fa-download"></i> 导出全部</button>
+                <button type="button" class="btn btn-secondary" id="research-import-btn"><i class="fas fa-upload"></i> 导入</button>
+                <input type="file" id="research-import-file" accept="application/json" style="display:none;">
+            </div>
+
+            <div id="research-record-list-panel" style="display:none; margin-bottom: 14px; border: 1px solid #dbeafe; background: #f8fbff; border-radius: 10px; padding: 12px;">
+                <div style="font-weight: 700; color: #1d4ed8; margin-bottom: 10px;"><i class="fas fa-folder-open"></i> 记录列表（按更新时间）</div>
+                <div style="display: grid; gap: 8px; max-height: 280px; overflow: auto;">
+                    ${sortedRecords.length === 0 ? `
+                        <div style="color:#64748b; font-size:0.9rem; padding: 8px;">暂无记录，请先保存一个阶段后自动生成记录。</div>
+                    ` : sortedRecords.map(item => `
+                        <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
+                            <div>
+                                <div style="font-weight: 600; color:#334155;">${item.recordId}</div>
+                                <div style="font-size:0.82rem; color:#64748b;">更新时间：${item.updatedAt ? new Date(item.updatedAt).toLocaleString('zh-CN') : '-'}</div>
+                            </div>
+                            <button type="button" class="btn btn-secondary research-record-load-btn" data-record-id="${item.recordId}"><i class="fas fa-arrow-right"></i> 加载</button>
+                            <button type="button" class="btn btn-secondary research-record-delete-btn" data-record-id="${item.recordId}"><i class="fas fa-trash"></i> 删除</button>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
             <div style="background: linear-gradient(135deg, #f7fbff, #edf6ff); border: 1px solid #d7e8ff; border-radius: 10px; padding: 14px 16px; color: #475569; margin-bottom: 16px; line-height: 1.7;">
                 点击阶段行即可切换录入页面；每个阶段支持“保存草稿”和“导出JSON”，便于质控和后续统计。
+            </div>
+
+            <div style="border: 1px solid #fde68a; background: #fffbeb; border-radius: 10px; padding: 12px 14px; color: #92400e; margin-bottom: 16px; line-height: 1.7;">
+                <div style="font-weight: 700; margin-bottom: 6px;"><i class="fas fa-triangle-exclamation"></i> 填写须知（D0前请先阅读）</div>
+                <div style="font-size: 0.9rem;">请先完整填写 D0 核心信息（调查单位、患者编号、入院时间、主病种），再进入 D1/D3/D5；所有数值指标请按字段单位录入，避免单位混淆。</div>
             </div>
 
             <div style="display: grid; gap: 10px; margin-bottom: 18px;">
@@ -1724,10 +1925,10 @@ renderClinicalResearch() {
                     <span style="font-size: 0.85rem; color: #6b7280;">${activeConfig.subtitle}</span>
                 </div>
                 <div id="research-form-error" style="display:none; border:1px solid #fecaca; background:#fff1f2; color:#b91c1c; padding:10px 12px; border-radius:8px; font-size:0.9rem;"></div>
-                ${formFields}
+                <div style="display: grid; gap: 10px;">${formGroups}</div>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; padding-top: 8px;">
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存当前阶段</button>
-                    <button type="button" class="btn btn-secondary" id="research-export-btn"><i class="fas fa-file-export"></i> 导出CRF JSON</button>
+                    <button type="button" class="btn btn-secondary" id="research-export-btn"><i class="fas fa-file-export"></i> 导出当前记录</button>
                 </div>
             </form>
         </div>
@@ -1742,6 +1943,117 @@ setupClinicalResearchEvents() {
             this.researchActiveStage = stage;
             await this.loadPage('clinical-research');
         });
+    });
+
+    const recordIdInput = document.getElementById('research-record-id');
+    const getRecordId = () => String(recordIdInput?.value || '').trim();
+
+    const recordListPanel = document.getElementById('research-record-list-panel');
+    document.getElementById('research-record-list-btn')?.addEventListener('click', () => {
+        if (!recordListPanel) return;
+        recordListPanel.style.display = recordListPanel.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.querySelectorAll('.research-record-load-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+            const recordId = button.getAttribute('data-record-id');
+            if (!recordId) return;
+            const found = this.loadResearchRecordById(recordId);
+            if (!found) {
+                this.showNotification('记录不存在或已被删除', 'warning');
+                return;
+            }
+            this.showNotification(`已加载记录：${recordId}`, 'success');
+            await this.loadPage('clinical-research');
+        });
+    });
+
+    document.querySelectorAll('.research-record-delete-btn').forEach(button => {
+        button.addEventListener('click', async () => {
+            const recordId = button.getAttribute('data-record-id');
+            if (!recordId) return;
+            if (!confirm(`确定删除记录 ${recordId} 吗？`)) {
+                return;
+            }
+            this.researchRecords = this.researchRecords.filter(item => item.recordId !== recordId);
+            this.saveResearchRecordsToLocal();
+            if (this.currentResearchRecordId === recordId) {
+                this.currentResearchRecordId = '';
+            }
+            this.showNotification(`已删除记录：${recordId}`, 'success');
+            await this.loadPage('clinical-research');
+        });
+    });
+
+    document.getElementById('research-search-btn')?.addEventListener('click', async () => {
+        const recordId = getRecordId();
+        if (!recordId) {
+            this.showNotification('请输入记录编号后再检索', 'warning');
+            return;
+        }
+        const found = this.loadResearchRecordById(recordId);
+        if (!found) {
+            this.showNotification('未找到该记录编号', 'warning');
+            return;
+        }
+        this.showNotification(`已加载记录：${recordId}`, 'success');
+        await this.loadPage('clinical-research');
+    });
+
+    document.getElementById('research-new-record-btn')?.addEventListener('click', async () => {
+        const newId = this.createResearchRecordId();
+        this.currentResearchRecordId = newId;
+        this.researchForms = this.getDefaultResearchForms();
+        this.saveResearchFormsToLocal();
+        this.showNotification(`已新建记录：${newId}`, 'success');
+        await this.loadPage('clinical-research');
+    });
+
+    document.getElementById('research-export-all-btn')?.addEventListener('click', () => {
+        const payload = {
+            project: '中国急诊—慢重症精准化诊疗多中心研究',
+            exportedAt: new Date().toISOString(),
+            records: this.researchRecords
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `ecci-crf-records-${Date.now()}.json`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+    });
+
+    const importInput = document.getElementById('research-import-file');
+    document.getElementById('research-import-btn')?.addEventListener('click', () => importInput?.click());
+    importInput?.addEventListener('change', async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const parsed = JSON.parse(text);
+            const imported = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.records) ? parsed.records : []);
+            if (imported.length === 0) {
+                this.showNotification('导入文件中未发现有效记录', 'warning');
+                return;
+            }
+            imported.forEach(item => {
+                if (!item || !item.recordId || !item.data) return;
+                const index = this.researchRecords.findIndex(rec => rec.recordId === item.recordId);
+                if (index >= 0) {
+                    this.researchRecords[index] = item;
+                } else {
+                    this.researchRecords.push(item);
+                }
+            });
+            this.saveResearchRecordsToLocal();
+            this.showNotification(`导入完成：${imported.length} 条`, 'success');
+            await this.loadPage('clinical-research');
+        } catch (error) {
+            this.showNotification('导入失败：JSON 格式不正确', 'error');
+        } finally {
+            importInput.value = '';
+        }
     });
 
     const form = document.getElementById('research-form');
@@ -1792,21 +2104,32 @@ setupClinicalResearchEvents() {
 
             this.researchForms[stage] = stageData;
             this.saveResearchFormsToLocal();
+
+            let recordId = getRecordId();
+            if (!recordId) {
+                recordId = this.currentResearchRecordId || this.researchForms?.d0?.patient_code || this.createResearchRecordId();
+                if (recordIdInput) {
+                    recordIdInput.value = recordId;
+                }
+            }
+            this.upsertResearchRecord(recordId);
             this.showNotification(`${this.getClinicalResearchStages()[stage].title} 已保存`, 'success');
         });
     }
 
     document.getElementById('research-export-btn')?.addEventListener('click', () => {
+        const recordId = this.currentResearchRecordId || getRecordId() || this.researchForms?.d0?.patient_code || '未命名记录';
         const exportPayload = {
             project: '中国急诊—慢重症精准化诊疗多中心研究',
             exportedAt: new Date().toISOString(),
+            recordId,
             data: this.researchForms
         };
         const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const anchor = document.createElement('a');
         anchor.href = url;
-        anchor.download = `ecci-crf-${Date.now()}.json`;
+        anchor.download = `ecci-crf-${recordId}-${Date.now()}.json`;
         anchor.click();
         URL.revokeObjectURL(url);
     });
