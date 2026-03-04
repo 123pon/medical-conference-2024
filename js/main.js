@@ -1456,6 +1456,42 @@ renderHome() {
             <div style="font-size: 0.85rem; color: #999;">点击进入</div>
         </div>
     `).join('');
+
+    const researchSchedule = [
+        {
+            time: 'D0 入院当日',
+            focus: '基本信息 + 疾病情况 + 生活方式/体格',
+            fields: '入院途径、科室、生命体征、既往史与用药、本次入院主病种'
+        },
+        {
+            time: 'D1 入院后第1天',
+            focus: '检验/检查指标首次采集',
+            fields: '血气、生化、血常规、凝血、感染炎症、液体平衡、影像学'
+        },
+        {
+            time: 'D3 入院后第3天',
+            focus: '动态复评与并发症监测',
+            fields: '与D1同口径复测，重点记录机械通气、CRRT、感染/并发症变化'
+        },
+        {
+            time: 'D5 入院后第5天',
+            focus: '阶段疗效评估',
+            fields: '关键指标趋势、器官支持策略、病原学结果与治疗调整'
+        },
+        {
+            time: '出院后随访',
+            focus: '转归与远期结局追踪',
+            fields: '生存状态、再入院、功能状态、依从性与并发事件'
+        }
+    ];
+
+    const inputGuides = [
+        '优先录入“必填核心字段”：患者标识、入院时间、主病种、D1关键检验指标。',
+        '时间字段统一精确到分钟（例如抗生素首次使用、机械通气起止时间）。',
+        '检验项按“同一时点成组录入”，避免跨时点混填导致趋势分析偏差。',
+        '病种分支（卒中/呼衰/肿瘤/脓毒症/心衰/创伤）只填写对应模块，提高录入效率。',
+        '每次提交前检查异常值与单位（mmHg、mmol/L、mL）是否一致。'
+    ];
     
     return `
         <div class="page-card">
@@ -1472,22 +1508,39 @@ renderHome() {
             
             <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
                 <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
-                    <i class="fas fa-robot"></i> 优秀Agent展示
+                    <i class="fas fa-flask"></i> 临床实验研究（CRF）
                 </h3>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 25px; margin-bottom: 40px;">
-                    ${(this.agents || []).slice(0, 3).map(agent => `
-                        <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 3px 10px rgba(0,0,0,0.08); transition: all 0.3s; border: 1px solid #f0f0f0; cursor: pointer;" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 5px 15px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 3px 10px rgba(0,0,0,0.08)'">
-                            <div style="height: 200px; background: linear-gradient(135deg, #667eea, #764ba2); display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; overflow: hidden;">
-                                ${agent.image_url ? `<img src="${agent.image_url}" style="width: 100%; height: 100%; object-fit: cover;">` : `<i class="fas fa-image"></i>`}
-                            </div>
-                            <div style="padding: 20px;">
-                                <div style="font-weight: 600; color: #0066cc; margin-bottom: 8px; font-size: 1.1rem;">${agent.name}</div>
-                                <div style="font-size: 0.9rem; color: #666; line-height: 1.6; margin-bottom: 12px;">${agent.description || '暂无介绍'}</div>
-                                <div style="font-size: 0.85rem; color: #999;">${agent.category || '通用Agent'}</div>
-                            </div>
+
+                <div style="background: linear-gradient(135deg, #f7fbff, #eef6ff); border: 1px solid #d8eaff; border-radius: 12px; padding: 18px 20px; margin-bottom: 18px; color: #335; line-height: 1.8;">
+                    基于《中国急诊—慢重症精准化诊疗多中心研究》CRF，建议按“入院→住院动态→出院随访”分阶段录入，减少遗漏并便于后续质控与统计分析。
+                </div>
+
+                <div style="display: grid; gap: 12px; margin-bottom: 24px;">
+                    ${researchSchedule.map(item => `
+                        <div style="display: grid; grid-template-columns: 180px 220px 1fr; gap: 12px; align-items: center; background: #fff; border: 1px solid #edf2f7; border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                            <div style="font-weight: 700; color: #0066cc;">${item.time}</div>
+                            <div style="color: #333; font-weight: 600;">${item.focus}</div>
+                            <div style="color: #666; font-size: 0.92rem; line-height: 1.6;">${item.fields}</div>
                         </div>
                     `).join('')}
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 14px;">
+                    <div style="background: #fff; border: 1px solid #edf2f7; border-radius: 10px; padding: 16px;">
+                        <h4 style="margin: 0 0 10px; color: #0066cc;"><i class="fas fa-clipboard-list"></i> 录入建议</h4>
+                        <ul style="margin: 0; padding-left: 18px; color: #555; line-height: 1.8; font-size: 0.92rem;">
+                            ${inputGuides.map(t => `<li>${t}</li>`).join('')}
+                        </ul>
+                    </div>
+
+                    <div style="background: #fff; border: 1px solid #edf2f7; border-radius: 10px; padding: 16px;">
+                        <h4 style="margin: 0 0 10px; color: #0066cc;"><i class="fas fa-user-shield"></i> 推荐分工</h4>
+                        <div style="display: grid; gap: 8px; color: #555; font-size: 0.92rem;">
+                            <div><strong>研究护士：</strong>基础信息、时间节点、随访计划</div>
+                            <div><strong>责任医生：</strong>病种分支、治疗决策、转归判定</div>
+                            <div><strong>数据管理员：</strong>逻辑核对、缺失值追踪、版本留痕</div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
