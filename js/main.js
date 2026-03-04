@@ -1098,7 +1098,7 @@ async loadSponsors() {
         
         const sponsorSection = document.getElementById('sponsor-section');
         if (sponsorSection) {
-            sponsorSection.style.display = 'none';
+            sponsorSection.style.display = page === 'home' ? 'block' : 'none';
         }
         
         switch(page) {
@@ -1458,11 +1458,40 @@ async loadSponsors() {
 
 // 在 renderHome() 方法中，更新赞助商部分
 renderHome() {
+    const modules = [
+        { page: 'experts', icon: 'fa-user-md', label: '专家库' },
+        { page: 'schedule', icon: 'fa-calendar-alt', label: '会议日程' },
+        { page: 'gallery', icon: 'fa-images', label: '会议内容' },
+        { page: 'forum', icon: 'fa-comments', label: '学术论坛' },
+        { page: 'sponsors', icon: 'fa-handshake', label: '赞助商' },
+        { page: 'profile', icon: 'fa-id-card', label: '我的名片' },
+        { page: 'my-schedule', icon: 'fa-calendar-check', label: '我的日程' },
+        { page: 'card-manager', icon: 'fa-address-book', label: '名片管理' }
+    ];
+
+    const moduleHTML = modules.map(m => `
+        <div class="home-module" data-page="${m.page}" style="background: white; padding: 25px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.08); transition: all 0.3s; border: 1px solid #f0f0f0;">
+            <div style="font-size: 2.5rem; color: #0066cc; margin-bottom: 15px;">
+                <i class="fas ${m.icon}"></i>
+            </div>
+            <div style="font-size: 1rem; font-weight: 600; color: #333; margin-bottom: 10px;">${m.label}</div>
+            <div style="font-size: 0.85rem; color: #999;">点击进入</div>
+        </div>
+    `).join('');
+
     return `
         <div class="page-card">
             <h1 class="page-title">
-                <i class="fas fa-flask"></i> 临床研究项目
+                <i class="fas fa-heartbeat"></i>欢迎参加2024医学年会
             </h1>
+
+            <p style="text-align: center; color: #666; max-width: 800px; margin: 0 auto 30px; font-size: 1.1rem;">
+                汇聚医学智慧，共创健康未来。本次会议汇集了国内外顶尖医学专家，共同探讨医学前沿技术和临床实践经验。
+            </p>
+
+            <div class="home-modules" style="margin-bottom: 24px;">
+                ${moduleHTML}
+            </div>
 
             <div class="research-project-entry" data-page="clinical-research" style="max-width: 860px; margin: 30px auto 10px; background: white; border-radius: 14px; border: 1px solid #e6eef8; box-shadow: 0 4px 14px rgba(0,0,0,0.08); padding: 24px; cursor: pointer; transition: all 0.25s;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.08)'">
                 <div style="display: flex; gap: 16px; align-items: center;">
@@ -1476,6 +1505,46 @@ renderHome() {
                     <div style="color: #0066cc; font-size: 1.2rem;">
                         <i class="fas fa-chevron-right"></i>
                     </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
+                <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
+                    <i class="fas fa-user-md"></i> 特邀专家
+                </h3>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px;">
+                    ${(this.experts || []).slice(0, 6).map(expert => `
+                        <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.08);" onclick="app.showExpertDetail('${expert.id}')" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
+                            <div style="font-size: 3rem; margin-bottom: 10px;">${expert.avatar}</div>
+                            <div style="font-weight: 600; color: #0066cc; margin-bottom: 5px; font-size: 1rem;">${expert.name}</div>
+                            <div style="font-size: 0.85rem; color: #666; margin-bottom: 3px;">${expert.title}</div>
+                            <div style="font-size: 0.8rem; color: #999;">${expert.department}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div style="margin-top: 30px; padding-top: 30px; border-top: 1px solid #eee;">
+                <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
+                    <i class="fas fa-handshake"></i> 战略合作伙伴
+                </h3>
+
+                <div class="sponsors-grid">
+                    ${(this.sponsors || []).slice(0, 12).map(sponsor => `
+                        <div class="sponsor-item" onclick="app.showSponsorDetail('${sponsor.id}')">
+                            <div class="sponsor-logo-placeholder"
+                                 style="background: linear-gradient(135deg, #ffe6e6, #ffcccc); color: #cc0000; font-weight: bold; font-size: ${this.getLogoFontSize(sponsor.logo_text)};">
+                                ${sponsor.logo_text || sponsor.name.substring(0, 2)}
+                            </div>
+                            <div class="sponsor-name">${sponsor.name}</div>
+                            <div class="sponsor-level" style="font-size: 0.75rem; color: #999; margin-top: 5px;">
+                                ${sponsor.level === 'platinum' ? '🏅 铂金赞助' :
+                                  sponsor.level === 'gold' ? '🥇 金牌赞助' :
+                                  sponsor.level === 'silver' ? '🥈 银牌赞助' : '🥉 铜牌赞助'}
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
         </div>
@@ -1496,7 +1565,7 @@ getClinicalResearchStages() {
                 { name: 'primary_diagnosis', label: '本次入院主病种', type: 'select', required: true, options: ['脑卒中', '呼吸衰竭', '恶性肿瘤', '脓毒症/感染', '心衰', '创伤', '其他'] },
                 { name: 'history_comorbidity', label: '既往史与并发症', type: 'textarea', placeholder: '例如：高血压10年、2型糖尿病5年、COPD...' },
                 { name: 'medication_history', label: '长期用药史', type: 'textarea', placeholder: '例如：二甲双胍、ACEI、β受体阻滞剂...' },
-                { name: 'vitals', label: '生命体征', type: 'text', placeholder: '例如：BP 128/74 mmHg，HR 102次/分，T 37.8℃' },
+                { name: 'vitals', label: '生命体征', type: 'text', unit: 'mmHg / 次/分 / ℃', placeholder: '例如：BP 128/74 mmHg，HR 102次/分，T 37.8℃' },
                 { name: 'd0_notes', label: 'D0备注', type: 'textarea', placeholder: '补充病情说明与特殊情况' }
             ]
         },
@@ -1504,11 +1573,11 @@ getClinicalResearchStages() {
             title: 'D1 入院后第1天',
             subtitle: '首次检验/检查采集',
             fields: [
-                { name: 'abg_summary', label: '动脉血气摘要', type: 'text', placeholder: '例如：pH 7.35, PaO2 78, PaCO2 42, Lac 2.1' },
-                { name: 'biochem_summary', label: '生化摘要', type: 'textarea', placeholder: '例如：Cr、BUN、Alb、TBil 等关键指标' },
-                { name: 'cbc_summary', label: '血常规摘要', type: 'text', placeholder: '例如：WBC 12.3, Hb 108, PLT 186' },
-                { name: 'coag_summary', label: '凝血摘要', type: 'text', placeholder: '例如：INR 1.2, APTT 36, D-Dimer 1.8' },
-                { name: 'infection_markers', label: '感染炎症指标', type: 'text', placeholder: '例如：CRP、PCT、IL-6' },
+                { name: 'abg_summary', label: '动脉血气摘要', type: 'text', required: true, unit: 'mmHg / mmol/L', placeholder: '例如：pH 7.35, PaO2 78, PaCO2 42, Lac 2.1' },
+                { name: 'biochem_summary', label: '生化摘要', type: 'textarea', required: true, unit: 'mmol/L / μmol/L', placeholder: '例如：Cr、BUN、Alb、TBil 等关键指标' },
+                { name: 'cbc_summary', label: '血常规摘要', type: 'text', required: true, unit: '10^9/L / g/L', placeholder: '例如：WBC 12.3, Hb 108, PLT 186' },
+                { name: 'coag_summary', label: '凝血摘要', type: 'text', unit: 's / mg/L', placeholder: '例如：INR 1.2, APTT 36, D-Dimer 1.8' },
+                { name: 'infection_markers', label: '感染炎症指标', type: 'text', unit: 'mg/L / ng/mL', placeholder: '例如：CRP、PCT、IL-6' },
                 { name: 'support_therapy', label: '器官支持治疗', type: 'textarea', placeholder: '机械通气/CRRT/血管活性药等起止与参数' },
                 { name: 'imaging_result', label: '影像学结果', type: 'textarea', placeholder: 'CT/MRI/超声关键结论' }
             ]
@@ -1517,10 +1586,10 @@ getClinicalResearchStages() {
             title: 'D3 入院后第3天',
             subtitle: '动态复评与治疗调整',
             fields: [
-                { name: 'trend_changes', label: '关键指标趋势', type: 'textarea', placeholder: '与D1相比的变化（改善/恶化）' },
+                { name: 'trend_changes', label: '关键指标趋势', type: 'textarea', required: true, placeholder: '与D1相比的变化（改善/恶化）' },
                 { name: 'complications', label: '并发症记录', type: 'text', placeholder: '出血/血栓/AKI/ARDS等' },
                 { name: 'pathogen_result', label: '病原学结果', type: 'textarea', placeholder: '培养阳性、耐药情况、NGS结果' },
-                { name: 'treatment_adjustment', label: '治疗调整', type: 'textarea', placeholder: '抗感染方案、通气模式、补液策略调整' },
+                { name: 'treatment_adjustment', label: '治疗调整', type: 'textarea', required: true, placeholder: '抗感染方案、通气模式、补液策略调整' },
                 { name: 'd3_notes', label: 'D3备注', type: 'textarea' }
             ]
         },
@@ -1530,7 +1599,7 @@ getClinicalResearchStages() {
             fields: [
                 { name: 'organ_support_status', label: '器官支持状态', type: 'text', placeholder: '是否仍需MV/CRRT/升压药' },
                 { name: 'infection_control', label: '感染控制情况', type: 'text', placeholder: '炎症指标变化与控制评估' },
-                { name: 'overall_assessment', label: '阶段综合评估', type: 'textarea', placeholder: '病情演变、下一步计划' },
+                { name: 'overall_assessment', label: '阶段综合评估', type: 'textarea', required: true, placeholder: '病情演变、下一步计划' },
                 { name: 'd5_notes', label: 'D5备注', type: 'textarea' }
             ]
         },
@@ -1538,14 +1607,42 @@ getClinicalResearchStages() {
             title: '出院后随访',
             subtitle: '转归与远期结局',
             fields: [
-                { name: 'followup_date', label: '随访日期', type: 'date' },
-                { name: 'survival_status', label: '生存状态', type: 'select', options: ['生存', '死亡', '失访'] },
+                { name: 'followup_date', label: '随访日期', type: 'date', required: true },
+                { name: 'survival_status', label: '生存状态', type: 'select', required: true, options: ['生存', '死亡', '失访'] },
                 { name: 'readmission', label: '是否再入院', type: 'select', options: ['否', '是'] },
                 { name: 'functional_status', label: '功能状态/生活能力', type: 'textarea', placeholder: 'ECOG/PS或日常活动能力描述' },
                 { name: 'followup_notes', label: '随访备注', type: 'textarea' }
             ]
         }
     };
+},
+
+getResearchMissingFields(stage, stageData) {
+    const stageConfig = this.getClinicalResearchStages()[stage];
+    if (!stageConfig) return [];
+    return stageConfig.fields.filter(field => field.required && !String(stageData[field.name] || '').trim());
+},
+
+clearResearchFieldHighlights(form) {
+    form.querySelectorAll('[data-field-container]').forEach(container => {
+        container.style.background = 'transparent';
+        const input = container.querySelector('[name]');
+        if (input) {
+            input.style.borderColor = '#dbe3ee';
+        }
+    });
+},
+
+highlightResearchMissingFields(form, missingFields) {
+    missingFields.forEach(field => {
+        const container = form.querySelector(`[data-field-container="${field.name}"]`);
+        if (!container) return;
+        container.style.background = '#fff7f7';
+        const input = container.querySelector('[name]');
+        if (input) {
+            input.style.borderColor = '#dc2626';
+        }
+    });
 },
 
 renderClinicalResearch() {
@@ -1574,11 +1671,12 @@ renderClinicalResearch() {
     const formFields = activeConfig.fields.map(field => {
         const value = (this.researchForms[activeStage] || {})[field.name] || '';
         const requiredMark = field.required ? '<span style="color:#dc2626;">*</span>' : '';
+        const unitText = field.unit ? `<span style="font-size: 0.78rem; color: #64748b; font-weight: 500; margin-left: 8px;">单位：${field.unit}</span>` : '';
 
         if (field.type === 'textarea') {
             return `
-                <div style="display: grid; gap: 6px;">
-                    <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}</label>
+                <div data-field-container="${field.name}" style="display: grid; gap: 6px; padding: 6px; border-radius: 8px; transition: all 0.2s;">
+                    <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}${unitText}</label>
                     <textarea name="${field.name}" rows="3" placeholder="${field.placeholder || ''}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; resize: vertical;">${value}</textarea>
                 </div>
             `;
@@ -1587,8 +1685,8 @@ renderClinicalResearch() {
         if (field.type === 'select') {
             const options = (field.options || []).map(option => `<option value="${option}" ${value === option ? 'selected' : ''}>${option}</option>`).join('');
             return `
-                <div style="display: grid; gap: 6px;">
-                    <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}</label>
+                <div data-field-container="${field.name}" style="display: grid; gap: 6px; padding: 6px; border-radius: 8px; transition: all 0.2s;">
+                    <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}${unitText}</label>
                     <select name="${field.name}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; background: white;">
                         <option value="">请选择</option>
                         ${options}
@@ -1598,8 +1696,8 @@ renderClinicalResearch() {
         }
 
         return `
-            <div style="display: grid; gap: 6px;">
-                <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}</label>
+            <div data-field-container="${field.name}" style="display: grid; gap: 6px; padding: 6px; border-radius: 8px; transition: all 0.2s;">
+                <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}${unitText}</label>
                 <input type="${field.type || 'text'}" name="${field.name}" value="${value}" placeholder="${field.placeholder || ''}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem;" ${field.required ? 'required' : ''}>
             </div>
         `;
@@ -1625,6 +1723,7 @@ renderClinicalResearch() {
                     <h3 style="margin: 0; color: #0066cc;"><i class="fas fa-clipboard-list"></i> ${activeConfig.title} 录入</h3>
                     <span style="font-size: 0.85rem; color: #6b7280;">${activeConfig.subtitle}</span>
                 </div>
+                <div id="research-form-error" style="display:none; border:1px solid #fecaca; background:#fff1f2; color:#b91c1c; padding:10px 12px; border-radius:8px; font-size:0.9rem;"></div>
                 ${formFields}
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; padding-top: 8px;">
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存当前阶段</button>
@@ -1647,6 +1746,18 @@ setupClinicalResearchEvents() {
 
     const form = document.getElementById('research-form');
     if (form) {
+        form.querySelectorAll('[name]').forEach(input => {
+            input.addEventListener('input', () => {
+                const fieldName = input.getAttribute('name');
+                if (!fieldName) return;
+                const container = form.querySelector(`[data-field-container="${fieldName}"]`);
+                if (container && String(input.value || '').trim()) {
+                    container.style.background = 'transparent';
+                    input.style.borderColor = '#dbe3ee';
+                }
+            });
+        });
+
         form.addEventListener('submit', (event) => {
             event.preventDefault();
             const stage = form.getAttribute('data-stage');
@@ -1656,6 +1767,29 @@ setupClinicalResearchEvents() {
             for (const [key, value] of formData.entries()) {
                 stageData[key] = String(value).trim();
             }
+
+            const errorBox = document.getElementById('research-form-error');
+            this.clearResearchFieldHighlights(form);
+            const missingFields = this.getResearchMissingFields(stage, stageData);
+            if (missingFields.length > 0) {
+                this.highlightResearchMissingFields(form, missingFields);
+                if (errorBox) {
+                    errorBox.style.display = 'block';
+                    errorBox.textContent = `请先填写必填项：${missingFields.map(item => item.label).join('、')}`;
+                }
+                const firstMissing = form.querySelector(`[data-field-container="${missingFields[0].name}"]`);
+                if (firstMissing) {
+                    firstMissing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                this.showNotification('存在未填写必填项，请先补全', 'warning');
+                return;
+            }
+
+            if (errorBox) {
+                errorBox.style.display = 'none';
+                errorBox.textContent = '';
+            }
+
             this.researchForms[stage] = stageData;
             this.saveResearchFormsToLocal();
             this.showNotification(`${this.getClinicalResearchStages()[stage].title} 已保存`, 'success');
