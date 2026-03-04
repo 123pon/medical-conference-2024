@@ -8,6 +8,8 @@ const AppState = {
     sponsors: [],
     contactCards: [],
     myScheduleItems: [],
+    researchForms: {},
+    researchActiveStage: 'd0',
     sidebarCollapsed: true,
     rightSidebarCollapsed: true,
     currentUser: null,
@@ -34,6 +36,7 @@ const AppState = {
     // 加载本地功能数据
     this.loadContactCardsFromLocal();
     this.loadMyScheduleFromLocal();
+    this.loadResearchFormsFromLocal();
     
     // 初始化数据
     this.setupAppUtilities();
@@ -1030,6 +1033,22 @@ async loadSponsors() {
     saveMyScheduleToLocal() {
         localStorage.setItem('conference_my_schedule', JSON.stringify(this.myScheduleItems));
     },
+
+    loadResearchFormsFromLocal() {
+        const saved = localStorage.getItem('conference_research_forms');
+        const defaultValue = {
+            d0: {},
+            d1: {},
+            d3: {},
+            d5: {},
+            followup: {}
+        };
+        this.researchForms = saved ? { ...defaultValue, ...JSON.parse(saved) } : defaultValue;
+    },
+
+    saveResearchFormsToLocal() {
+        localStorage.setItem('conference_research_forms', JSON.stringify(this.researchForms));
+    },
     
     updateProfilePreview() {
         const authSection = document.getElementById('auth-section');
@@ -1079,7 +1098,7 @@ async loadSponsors() {
         
         const sponsorSection = document.getElementById('sponsor-section');
         if (sponsorSection) {
-            sponsorSection.style.display = page === 'home' ? 'block' : 'none';
+            sponsorSection.style.display = 'none';
         }
         
         switch(page) {
@@ -1090,6 +1109,10 @@ async loadSponsors() {
             case 'home':
                 contentDiv.innerHTML = this.renderHome();
                 this.setupHomeEvents();
+                break;
+            case 'clinical-research':
+                contentDiv.innerHTML = this.renderClinicalResearch();
+                this.setupClinicalResearchEvents();
                 break;
             case 'experts':
                 contentDiv.innerHTML = this.renderExperts();
@@ -1435,156 +1458,228 @@ async loadSponsors() {
 
 // 在 renderHome() 方法中，更新赞助商部分
 renderHome() {
-    // 动态生成功能模块
-    const modules = [
-        { page: 'experts', icon: 'fa-user-md', label: '专家库' },
-        { page: 'schedule', icon: 'fa-calendar-alt', label: '会议日程' },
-        { page: 'gallery', icon: 'fa-images', label: '会议内容' },
-        { page: 'forum', icon: 'fa-comments', label: '学术论坛' },
-        { page: 'sponsors', icon: 'fa-handshake', label: '赞助商' },
-        { page: 'profile', icon: 'fa-id-card', label: '我的名片' },
-        { page: 'my-schedule', icon: 'fa-calendar-check', label: '我的日程' },
-        { page: 'card-manager', icon: 'fa-address-book', label: '名片管理' }
-    ];
-    
-    const moduleHTML = modules.map(m => `
-        <div class="home-module" data-page="${m.page}" style="background: white; padding: 25px; border-radius: 12px; text-align: center; cursor: pointer; box-shadow: 0 3px 10px rgba(0,0,0,0.08); transition: all 0.3s; border: 1px solid #f0f0f0;">
-            <div style="font-size: 2.5rem; color: #0066cc; margin-bottom: 15px;">
-                <i class="fas ${m.icon}"></i>
-            </div>
-            <div style="font-size: 1rem; font-weight: 600; color: #333; margin-bottom: 10px;">${m.label}</div>
-            <div style="font-size: 0.85rem; color: #999;">点击进入</div>
-        </div>
-    `).join('');
-
-    const researchSchedule = [
-        {
-            time: 'D0 入院当日',
-            focus: '基本信息 + 疾病情况 + 生活方式/体格',
-            fields: '入院途径、科室、生命体征、既往史与用药、本次入院主病种'
-        },
-        {
-            time: 'D1 入院后第1天',
-            focus: '检验/检查指标首次采集',
-            fields: '血气、生化、血常规、凝血、感染炎症、液体平衡、影像学'
-        },
-        {
-            time: 'D3 入院后第3天',
-            focus: '动态复评与并发症监测',
-            fields: '与D1同口径复测，重点记录机械通气、CRRT、感染/并发症变化'
-        },
-        {
-            time: 'D5 入院后第5天',
-            focus: '阶段疗效评估',
-            fields: '关键指标趋势、器官支持策略、病原学结果与治疗调整'
-        },
-        {
-            time: '出院后随访',
-            focus: '转归与远期结局追踪',
-            fields: '生存状态、再入院、功能状态、依从性与并发事件'
-        }
-    ];
-
-    const inputGuides = [
-        '优先录入“必填核心字段”：患者标识、入院时间、主病种、D1关键检验指标。',
-        '时间字段统一精确到分钟（例如抗生素首次使用、机械通气起止时间）。',
-        '检验项按“同一时点成组录入”，避免跨时点混填导致趋势分析偏差。',
-        '病种分支（卒中/呼衰/肿瘤/脓毒症/心衰/创伤）只填写对应模块，提高录入效率。',
-        '每次提交前检查异常值与单位（mmHg、mmol/L、mL）是否一致。'
-    ];
-    
     return `
         <div class="page-card">
             <h1 class="page-title">
-                <i class="fas fa-heartbeat"></i>欢迎参加2024医学年会
+                <i class="fas fa-flask"></i> 临床研究项目
             </h1>
-            <p style="text-align: center; color: #666; max-width: 800px; margin: 0 auto 30px; font-size: 1.1rem;">
-                汇聚医学智慧，共创健康未来。本次会议汇集了国内外顶尖医学专家，共同探讨医学前沿技术和临床实践经验。
-            </p>
-            
-            <div class="home-modules">
-                ${moduleHTML}
-            </div>
-            
-            <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
-                <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
-                    <i class="fas fa-flask"></i> 临床实验研究（CRF）
-                </h3>
 
-                <div style="background: linear-gradient(135deg, #f7fbff, #eef6ff); border: 1px solid #d8eaff; border-radius: 12px; padding: 18px 20px; margin-bottom: 18px; color: #335; line-height: 1.8;">
-                    基于《中国急诊—慢重症精准化诊疗多中心研究》CRF，建议按“入院→住院动态→出院随访”分阶段录入，减少遗漏并便于后续质控与统计分析。
-                </div>
-
-                <div style="display: grid; gap: 12px; margin-bottom: 24px;">
-                    ${researchSchedule.map(item => `
-                        <div style="display: grid; grid-template-columns: 180px 220px 1fr; gap: 12px; align-items: center; background: #fff; border: 1px solid #edf2f7; border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
-                            <div style="font-weight: 700; color: #0066cc;">${item.time}</div>
-                            <div style="color: #333; font-weight: 600;">${item.focus}</div>
-                            <div style="color: #666; font-size: 0.92rem; line-height: 1.6;">${item.fields}</div>
-                        </div>
-                    `).join('')}
-                </div>
-
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 14px;">
-                    <div style="background: #fff; border: 1px solid #edf2f7; border-radius: 10px; padding: 16px;">
-                        <h4 style="margin: 0 0 10px; color: #0066cc;"><i class="fas fa-clipboard-list"></i> 录入建议</h4>
-                        <ul style="margin: 0; padding-left: 18px; color: #555; line-height: 1.8; font-size: 0.92rem;">
-                            ${inputGuides.map(t => `<li>${t}</li>`).join('')}
-                        </ul>
+            <div class="research-project-entry" data-page="clinical-research" style="max-width: 860px; margin: 30px auto 10px; background: white; border-radius: 14px; border: 1px solid #e6eef8; box-shadow: 0 4px 14px rgba(0,0,0,0.08); padding: 24px; cursor: pointer; transition: all 0.25s;" onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 14px rgba(0,0,0,0.08)'">
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <div style="width: 56px; height: 56px; border-radius: 50%; background: #eaf4ff; color: #0066cc; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0;">
+                        <i class="fas fa-hospital"></i>
                     </div>
-
-                    <div style="background: #fff; border: 1px solid #edf2f7; border-radius: 10px; padding: 16px;">
-                        <h4 style="margin: 0 0 10px; color: #0066cc;"><i class="fas fa-user-shield"></i> 推荐分工</h4>
-                        <div style="display: grid; gap: 8px; color: #555; font-size: 0.92rem;">
-                            <div><strong>研究护士：</strong>基础信息、时间节点、随访计划</div>
-                            <div><strong>责任医生：</strong>病种分支、治疗决策、转归判定</div>
-                            <div><strong>数据管理员：</strong>逻辑核对、缺失值追踪、版本留痕</div>
-                        </div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 1.2rem; font-weight: 700; color: #1d3557; margin-bottom: 6px;">中国急诊—慢重症精准化诊疗多中心研究</div>
+                        <div style="font-size: 0.92rem; color: #6b7280; line-height: 1.7;">点击进入项目，按 CRF 阶段（D0/D1/D3/D5/随访）进行结构化录入。</div>
                     </div>
-                </div>
-            </div>
-            
-            <div style="margin-top: 40px; padding-top: 30px; border-top: 1px solid #eee;">
-                <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
-                    <i class="fas fa-user-md"></i> 特邀专家
-                </h3>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px;">
-                    ${(this.experts || []).slice(0, 6).map(expert => `
-                        <div style="background: linear-gradient(135deg, #e3f2fd, #bbdefb); border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.08);" onclick="app.showExpertDetail('${expert.id}')" onmouseover="this.style.transform='translateY(-5px)';this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)'">
-                            <div style="font-size: 3rem; margin-bottom: 10px;">${expert.avatar}</div>
-                            <div style="font-weight: 600; color: #0066cc; margin-bottom: 5px; font-size: 1rem;">${expert.name}</div>
-                            <div style="font-size: 0.85rem; color: #666; margin-bottom: 3px;">${expert.title}</div>
-                            <div style="font-size: 0.8rem; color: #999;">${expert.department}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            
-            <div style="margin-top: 30px; padding-top: 30px; border-top: 1px solid #eee;">
-                <h3 class="section-title" style="text-align: center; color: #0066cc; margin-bottom: 25px;">
-                    <i class="fas fa-handshake"></i> 战略合作伙伴
-                </h3>
-                
-                <div class="sponsors-grid">
-                    ${(this.sponsors || []).slice(0, 12).map(sponsor => `
-                        <div class="sponsor-item" onclick="app.showSponsorDetail('${sponsor.id}')">
-                            <div class="sponsor-logo-placeholder" 
-                                 style="background: linear-gradient(135deg, #ffe6e6, #ffcccc); color: #cc0000; font-weight: bold; font-size: ${this.getLogoFontSize(sponsor.logo_text)};">
-                                ${sponsor.logo_text || sponsor.name.substring(0, 2)}
-                            </div>
-                            <div class="sponsor-name">${sponsor.name}</div>
-                            <div class="sponsor-level" style="font-size: 0.75rem; color: #999; margin-top: 5px;">
-                                ${sponsor.level === 'platinum' ? '🏅 铂金赞助' : 
-                                  sponsor.level === 'gold' ? '🥇 金牌赞助' : 
-                                  sponsor.level === 'silver' ? '🥈 银牌赞助' : '🥉 铜牌赞助'}
-                            </div>
-                        </div>
-                    `).join('')}
+                    <div style="color: #0066cc; font-size: 1.2rem;">
+                        <i class="fas fa-chevron-right"></i>
+                    </div>
                 </div>
             </div>
         </div>
     `;
+},
+
+getClinicalResearchStages() {
+    return {
+        d0: {
+            title: 'D0 入院当日',
+            subtitle: '基本信息与疾病基线',
+            fields: [
+                { name: 'site_name', label: '调查单位/中心', type: 'text', required: true, placeholder: '例如：北京某三甲医院 EICU' },
+                { name: 'patient_code', label: '患者编号', type: 'text', required: true, placeholder: '例如：ECCI-BJ-0001' },
+                { name: 'admission_time', label: '入院时间', type: 'datetime-local', required: true },
+                { name: 'admission_path', label: '入院途径', type: 'select', options: ['社区转诊', '外院转诊', '院内转诊', '自行来院', '其他'] },
+                { name: 'department', label: '收治科室', type: 'select', options: ['急诊/EICU', '综合ICU', '专科病房'] },
+                { name: 'primary_diagnosis', label: '本次入院主病种', type: 'select', required: true, options: ['脑卒中', '呼吸衰竭', '恶性肿瘤', '脓毒症/感染', '心衰', '创伤', '其他'] },
+                { name: 'history_comorbidity', label: '既往史与并发症', type: 'textarea', placeholder: '例如：高血压10年、2型糖尿病5年、COPD...' },
+                { name: 'medication_history', label: '长期用药史', type: 'textarea', placeholder: '例如：二甲双胍、ACEI、β受体阻滞剂...' },
+                { name: 'vitals', label: '生命体征', type: 'text', placeholder: '例如：BP 128/74 mmHg，HR 102次/分，T 37.8℃' },
+                { name: 'd0_notes', label: 'D0备注', type: 'textarea', placeholder: '补充病情说明与特殊情况' }
+            ]
+        },
+        d1: {
+            title: 'D1 入院后第1天',
+            subtitle: '首次检验/检查采集',
+            fields: [
+                { name: 'abg_summary', label: '动脉血气摘要', type: 'text', placeholder: '例如：pH 7.35, PaO2 78, PaCO2 42, Lac 2.1' },
+                { name: 'biochem_summary', label: '生化摘要', type: 'textarea', placeholder: '例如：Cr、BUN、Alb、TBil 等关键指标' },
+                { name: 'cbc_summary', label: '血常规摘要', type: 'text', placeholder: '例如：WBC 12.3, Hb 108, PLT 186' },
+                { name: 'coag_summary', label: '凝血摘要', type: 'text', placeholder: '例如：INR 1.2, APTT 36, D-Dimer 1.8' },
+                { name: 'infection_markers', label: '感染炎症指标', type: 'text', placeholder: '例如：CRP、PCT、IL-6' },
+                { name: 'support_therapy', label: '器官支持治疗', type: 'textarea', placeholder: '机械通气/CRRT/血管活性药等起止与参数' },
+                { name: 'imaging_result', label: '影像学结果', type: 'textarea', placeholder: 'CT/MRI/超声关键结论' }
+            ]
+        },
+        d3: {
+            title: 'D3 入院后第3天',
+            subtitle: '动态复评与治疗调整',
+            fields: [
+                { name: 'trend_changes', label: '关键指标趋势', type: 'textarea', placeholder: '与D1相比的变化（改善/恶化）' },
+                { name: 'complications', label: '并发症记录', type: 'text', placeholder: '出血/血栓/AKI/ARDS等' },
+                { name: 'pathogen_result', label: '病原学结果', type: 'textarea', placeholder: '培养阳性、耐药情况、NGS结果' },
+                { name: 'treatment_adjustment', label: '治疗调整', type: 'textarea', placeholder: '抗感染方案、通气模式、补液策略调整' },
+                { name: 'd3_notes', label: 'D3备注', type: 'textarea' }
+            ]
+        },
+        d5: {
+            title: 'D5 入院后第5天',
+            subtitle: '阶段疗效评估',
+            fields: [
+                { name: 'organ_support_status', label: '器官支持状态', type: 'text', placeholder: '是否仍需MV/CRRT/升压药' },
+                { name: 'infection_control', label: '感染控制情况', type: 'text', placeholder: '炎症指标变化与控制评估' },
+                { name: 'overall_assessment', label: '阶段综合评估', type: 'textarea', placeholder: '病情演变、下一步计划' },
+                { name: 'd5_notes', label: 'D5备注', type: 'textarea' }
+            ]
+        },
+        followup: {
+            title: '出院后随访',
+            subtitle: '转归与远期结局',
+            fields: [
+                { name: 'followup_date', label: '随访日期', type: 'date' },
+                { name: 'survival_status', label: '生存状态', type: 'select', options: ['生存', '死亡', '失访'] },
+                { name: 'readmission', label: '是否再入院', type: 'select', options: ['否', '是'] },
+                { name: 'functional_status', label: '功能状态/生活能力', type: 'textarea', placeholder: 'ECOG/PS或日常活动能力描述' },
+                { name: 'followup_notes', label: '随访备注', type: 'textarea' }
+            ]
+        }
+    };
+},
+
+renderClinicalResearch() {
+    const stages = this.getClinicalResearchStages();
+    const stageOrder = ['d0', 'd1', 'd3', 'd5', 'followup'];
+    const activeStage = stages[this.researchActiveStage] ? this.researchActiveStage : 'd0';
+    const activeConfig = stages[activeStage];
+
+    const stageRows = stageOrder.map((key, index) => {
+        const stage = stages[key];
+        const isActive = activeStage === key;
+        const filledCount = stage.fields.filter(field => {
+            const value = (this.researchForms[key] || {})[field.name];
+            return value !== undefined && value !== null && String(value).trim() !== '';
+        }).length;
+
+        return `
+            <button class="research-stage-entry" data-stage="${key}" style="width: 100%; text-align: left; border: 1px solid ${isActive ? '#0066cc' : '#e5e7eb'}; background: ${isActive ? '#f0f8ff' : 'white'}; border-radius: 10px; padding: 14px 16px; cursor: pointer; display: grid; grid-template-columns: 160px 1fr 120px; gap: 12px; align-items: center;">
+                <div style="font-weight: 700; color: ${isActive ? '#0066cc' : '#374151'};">${stage.title}</div>
+                <div style="font-size: 0.92rem; color: #6b7280;">${stage.subtitle}</div>
+                <div style="justify-self: end; font-size: 0.84rem; color: ${filledCount > 0 ? '#0f766e' : '#9ca3af'};">已填 ${filledCount}/${stage.fields.length}</div>
+            </button>
+        `;
+    }).join('');
+
+    const formFields = activeConfig.fields.map(field => {
+        const value = (this.researchForms[activeStage] || {})[field.name] || '';
+        const requiredMark = field.required ? '<span style="color:#dc2626;">*</span>' : '';
+
+        if (field.type === 'textarea') {
+            return `
+                <div style="display: grid; gap: 6px;">
+                    <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}</label>
+                    <textarea name="${field.name}" rows="3" placeholder="${field.placeholder || ''}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; resize: vertical;">${value}</textarea>
+                </div>
+            `;
+        }
+
+        if (field.type === 'select') {
+            const options = (field.options || []).map(option => `<option value="${option}" ${value === option ? 'selected' : ''}>${option}</option>`).join('');
+            return `
+                <div style="display: grid; gap: 6px;">
+                    <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}</label>
+                    <select name="${field.name}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; background: white;">
+                        <option value="">请选择</option>
+                        ${options}
+                    </select>
+                </div>
+            `;
+        }
+
+        return `
+            <div style="display: grid; gap: 6px;">
+                <label style="font-weight: 600; color: #334155;">${requiredMark}${field.label}</label>
+                <input type="${field.type || 'text'}" name="${field.name}" value="${value}" placeholder="${field.placeholder || ''}" style="border: 1px solid #dbe3ee; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem;" ${field.required ? 'required' : ''}>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="page-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px;">
+                <h1 class="page-title" style="margin-bottom: 0;"><i class="fas fa-hospital"></i> 中国急诊—慢重症精准化诊疗多中心研究</h1>
+                <button class="btn btn-secondary" id="back-to-home" style="white-space: nowrap;"><i class="fas fa-arrow-left"></i> 返回首页</button>
+            </div>
+
+            <div style="background: linear-gradient(135deg, #f7fbff, #edf6ff); border: 1px solid #d7e8ff; border-radius: 10px; padding: 14px 16px; color: #475569; margin-bottom: 16px; line-height: 1.7;">
+                点击阶段行即可切换录入页面；每个阶段支持“保存草稿”和“导出JSON”，便于质控和后续统计。
+            </div>
+
+            <div style="display: grid; gap: 10px; margin-bottom: 18px;">
+                ${stageRows}
+            </div>
+
+            <form id="research-form" data-stage="${activeStage}" style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; display: grid; gap: 14px;">
+                <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-bottom: 1px solid #eef2f7; padding-bottom: 10px;">
+                    <h3 style="margin: 0; color: #0066cc;"><i class="fas fa-clipboard-list"></i> ${activeConfig.title} 录入</h3>
+                    <span style="font-size: 0.85rem; color: #6b7280;">${activeConfig.subtitle}</span>
+                </div>
+                ${formFields}
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; padding-top: 8px;">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存当前阶段</button>
+                    <button type="button" class="btn btn-secondary" id="research-export-btn"><i class="fas fa-file-export"></i> 导出CRF JSON</button>
+                </div>
+            </form>
+        </div>
+    `;
+},
+
+setupClinicalResearchEvents() {
+    document.querySelectorAll('.research-stage-entry').forEach(button => {
+        button.addEventListener('click', async () => {
+            const stage = button.getAttribute('data-stage');
+            if (!stage) return;
+            this.researchActiveStage = stage;
+            await this.loadPage('clinical-research');
+        });
+    });
+
+    const form = document.getElementById('research-form');
+    if (form) {
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const stage = form.getAttribute('data-stage');
+            if (!stage) return;
+            const formData = new FormData(form);
+            const stageData = {};
+            for (const [key, value] of formData.entries()) {
+                stageData[key] = String(value).trim();
+            }
+            this.researchForms[stage] = stageData;
+            this.saveResearchFormsToLocal();
+            this.showNotification(`${this.getClinicalResearchStages()[stage].title} 已保存`, 'success');
+        });
+    }
+
+    document.getElementById('research-export-btn')?.addEventListener('click', () => {
+        const exportPayload = {
+            project: '中国急诊—慢重症精准化诊疗多中心研究',
+            exportedAt: new Date().toISOString(),
+            data: this.researchForms
+        };
+        const blob = new Blob([JSON.stringify(exportPayload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `ecci-crf-${Date.now()}.json`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('back-to-home')?.addEventListener('click', async () => {
+        await this.loadPage('home');
+    });
 },
 
 // 添加赞助商详情的显示方法
@@ -1615,7 +1710,7 @@ getLogoFontSize(logoText) {
 },
     
     setupHomeEvents() {
-        const homeItems = Array.from(document.querySelectorAll('.home-module'));
+        const homeItems = Array.from(document.querySelectorAll('.home-module, .research-project-entry'));
         homeItems.forEach(item => {
             item.addEventListener('click', async () => {
                 const page = item.getAttribute('data-page');
