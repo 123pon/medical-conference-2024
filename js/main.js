@@ -1800,6 +1800,7 @@ renderClinicalResearch() {
     const stageOrder = ['d0', 'd1', 'd3', 'd5', 'followup'];
     const activeStage = stages[this.researchActiveStage] ? this.researchActiveStage : 'd0';
     const activeConfig = stages[activeStage];
+    const isMobile = window.innerWidth <= 768;
     const recordIdValue = this.currentResearchRecordId || this.researchForms?.d0?.patient_code || '';
     const sortedRecords = [...(this.researchRecords || [])].sort((left, right) => {
         const leftTime = new Date(left.updatedAt || 0).getTime();
@@ -1816,10 +1817,10 @@ renderClinicalResearch() {
         }).length;
 
         return `
-            <button class="research-stage-entry" data-stage="${key}" style="width: 100%; text-align: left; border: 1px solid ${isActive ? '#0066cc' : '#e5e7eb'}; background: ${isActive ? '#f0f8ff' : 'white'}; border-radius: 10px; padding: 14px 16px; cursor: pointer; display: grid; grid-template-columns: 160px 1fr 120px; gap: 12px; align-items: center;">
+            <button class="research-stage-entry" data-stage="${key}" style="width: 100%; text-align: left; border: 1px solid ${isActive ? '#0066cc' : '#e5e7eb'}; background: ${isActive ? '#f0f8ff' : 'white'}; border-radius: 10px; padding: 12px 14px; cursor: pointer; display: grid; grid-template-columns: ${isMobile ? '1fr' : '160px 1fr 120px'}; gap: 8px; align-items: center;">
                 <div style="font-weight: 700; color: ${isActive ? '#0066cc' : '#374151'};">${stage.title}</div>
                 <div style="font-size: 0.92rem; color: #6b7280;">${stage.subtitle}</div>
-                <div style="justify-self: end; font-size: 0.84rem; color: ${filledCount > 0 ? '#0f766e' : '#9ca3af'};">已填 ${filledCount}/${stage.fields.length}</div>
+                <div style="justify-self: ${isMobile ? 'start' : 'end'}; font-size: 0.84rem; color: ${filledCount > 0 ? '#0f766e' : '#9ca3af'};">已填 ${filledCount}/${stage.fields.length}</div>
             </button>
         `;
     }).join('');
@@ -1865,7 +1866,7 @@ renderClinicalResearch() {
         return `
             <details ${groupIndex === 0 ? 'open' : ''} style="border: 1px solid #e5e7eb; border-radius: 10px; padding: 8px 10px; background: #fcfdff;">
                 <summary style="cursor: pointer; font-weight: 700; color: #1f3b64; padding: 6px 4px;">${groupName}（${groupFields.length}项）</summary>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; padding-top: 8px;">
+                <div style="display: grid; grid-template-columns: ${isMobile ? '1fr' : 'repeat(auto-fit, minmax(220px, 1fr))'}; gap: 10px; padding-top: 8px;">
                     ${fieldNodes}
                 </div>
             </details>
@@ -1874,18 +1875,18 @@ renderClinicalResearch() {
 
     return `
         <div class="page-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px;">
-                <h1 class="page-title" style="margin-bottom: 0;"><i class="fas fa-hospital"></i> 中国急诊—慢重症精准化诊疗多中心研究</h1>
-                <button class="btn btn-secondary" id="back-to-home" style="white-space: nowrap;"><i class="fas fa-arrow-left"></i> 返回首页</button>
+            <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px;">
+                <h1 class="page-title" style="margin-bottom: 0; font-size: ${isMobile ? '1.2rem' : '1.6rem'};"><i class="fas fa-hospital"></i> 中国急诊—慢重症精准化诊疗多中心研究</h1>
+                <button class="btn btn-secondary" id="back-to-home" style="white-space: nowrap; width: ${isMobile ? '100%' : 'auto'};"><i class="fas fa-arrow-left"></i> 返回首页</button>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr auto auto auto auto auto; gap: 10px; align-items: center; margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;">
-                <input id="research-record-id" type="text" value="${recordIdValue}" placeholder="请输入唯一记录编号（如 ECCI-0001）" style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem;">
-                <button type="button" class="btn btn-secondary" id="research-search-btn"><i class="fas fa-search"></i> 编号检索</button>
-                <button type="button" class="btn btn-secondary" id="research-new-record-btn"><i class="fas fa-file-circle-plus"></i> 新建记录</button>
-                <button type="button" class="btn btn-secondary" id="research-record-list-btn"><i class="fas fa-table-list"></i> 记录列表</button>
-                <button type="button" class="btn btn-secondary" id="research-export-all-btn"><i class="fas fa-download"></i> 导出全部</button>
-                <button type="button" class="btn btn-secondary" id="research-import-btn"><i class="fas fa-upload"></i> 导入</button>
+            <div style="display: grid; grid-template-columns: ${isMobile ? '1fr 1fr' : '1fr auto auto auto auto auto'}; gap: 10px; align-items: center; margin-bottom: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px;">
+                <input id="research-record-id" type="text" value="${recordIdValue}" placeholder="请输入唯一记录编号（如 ECCI-0001）" style="grid-column: 1 / -1; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; font-size: 0.92rem; min-width: 0;">
+                <button type="button" class="btn btn-secondary" id="research-search-btn" style="width: 100%;"><i class="fas fa-search"></i> 编号检索</button>
+                <button type="button" class="btn btn-secondary" id="research-new-record-btn" style="width: 100%;"><i class="fas fa-file-circle-plus"></i> 新建记录</button>
+                <button type="button" class="btn btn-secondary" id="research-record-list-btn" style="width: 100%;"><i class="fas fa-table-list"></i> 记录列表</button>
+                <button type="button" class="btn btn-secondary" id="research-export-all-btn" style="width: 100%;"><i class="fas fa-download"></i> 导出全部</button>
+                <button type="button" class="btn btn-secondary" id="research-import-btn" style="width: 100%; grid-column: ${isMobile ? '1 / -1' : 'auto'};"><i class="fas fa-upload"></i> 导入</button>
                 <input type="file" id="research-import-file" accept="application/json" style="display:none;">
             </div>
 
@@ -1895,13 +1896,13 @@ renderClinicalResearch() {
                     ${sortedRecords.length === 0 ? `
                         <div style="color:#64748b; font-size:0.9rem; padding: 8px;">暂无记录，请先保存一个阶段后自动生成记录。</div>
                     ` : sortedRecords.map(item => `
-                        <div style="display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
+                        <div style="display: grid; grid-template-columns: ${isMobile ? '1fr' : '1fr auto auto'}; gap: 8px; align-items: center; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px;">
                             <div>
                                 <div style="font-weight: 600; color:#334155;">${item.recordId}</div>
                                 <div style="font-size:0.82rem; color:#64748b;">更新时间：${item.updatedAt ? new Date(item.updatedAt).toLocaleString('zh-CN') : '-'}</div>
                             </div>
-                            <button type="button" class="btn btn-secondary research-record-load-btn" data-record-id="${item.recordId}"><i class="fas fa-arrow-right"></i> 加载</button>
-                            <button type="button" class="btn btn-secondary research-record-delete-btn" data-record-id="${item.recordId}"><i class="fas fa-trash"></i> 删除</button>
+                            <button type="button" class="btn btn-secondary research-record-load-btn" data-record-id="${item.recordId}" style="width:${isMobile ? '100%' : 'auto'};"><i class="fas fa-arrow-right"></i> 加载</button>
+                            <button type="button" class="btn btn-secondary research-record-delete-btn" data-record-id="${item.recordId}" style="width:${isMobile ? '100%' : 'auto'};"><i class="fas fa-trash"></i> 删除</button>
                         </div>
                     `).join('')}
                 </div>
@@ -1921,15 +1922,15 @@ renderClinicalResearch() {
             </div>
 
             <form id="research-form" data-stage="${activeStage}" style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 18px; display: grid; gap: 14px;">
-                <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; border-bottom: 1px solid #eef2f7; padding-bottom: 10px;">
+                <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; border-bottom: 1px solid #eef2f7; padding-bottom: 10px;">
                     <h3 style="margin: 0; color: #0066cc;"><i class="fas fa-clipboard-list"></i> ${activeConfig.title} 录入</h3>
                     <span style="font-size: 0.85rem; color: #6b7280;">${activeConfig.subtitle}</span>
                 </div>
                 <div id="research-form-error" style="display:none; border:1px solid #fecaca; background:#fff1f2; color:#b91c1c; padding:10px 12px; border-radius:8px; font-size:0.9rem;"></div>
                 <div style="display: grid; gap: 10px;">${formGroups}</div>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; padding-top: 8px;">
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> 保存当前阶段</button>
-                    <button type="button" class="btn btn-secondary" id="research-export-btn"><i class="fas fa-file-export"></i> 导出当前记录</button>
+                    <button type="submit" class="btn btn-primary" style="flex: 1 1 180px; width: ${isMobile ? '100%' : 'auto'};"><i class="fas fa-save"></i> 保存当前阶段</button>
+                    <button type="button" class="btn btn-secondary" id="research-export-btn" style="flex: 1 1 180px; width: ${isMobile ? '100%' : 'auto'};"><i class="fas fa-file-export"></i> 导出当前记录</button>
                 </div>
             </form>
         </div>
