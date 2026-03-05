@@ -1514,6 +1514,7 @@ async loadSponsors() {
 // 在 renderHome() 方法中，更新赞助商部分
 renderHome() {
     const modules = [
+        { page: 'clinical-research', icon: 'fa-flask', label: '临床研究' },
         { page: 'experts', icon: 'fa-user-md', label: '专家库' },
         { page: 'schedule', icon: 'fa-calendar-alt', label: '会议日程' },
         { page: 'gallery', icon: 'fa-images', label: '会议内容' },
