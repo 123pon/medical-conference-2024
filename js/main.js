@@ -1933,6 +1933,16 @@ renderClinicalResearch() {
                     <button type="button" class="btn btn-secondary" id="research-export-btn" style="flex: 1 1 180px; width: ${isMobile ? '100%' : 'auto'};"><i class="fas fa-file-export"></i> 导出当前记录</button>
                 </div>
             </form>
+
+            ${isMobile ? `
+            <div style="height: 72px;"></div>
+            <div id="research-mobile-sticky-actions" style="position: fixed; left: 0; right: 0; bottom: 0; z-index: 1005; background: rgba(255,255,255,0.98); border-top: 1px solid #dbe3ee; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -2px 10px rgba(0,0,0,0.08);">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; max-width: 720px; margin: 0 auto;">
+                    <button type="button" class="btn btn-primary" id="research-sticky-save"><i class="fas fa-save"></i> 保存</button>
+                    <button type="button" class="btn btn-secondary" id="research-sticky-export"><i class="fas fa-file-export"></i> 导出</button>
+                </div>
+            </div>
+            ` : ''}
         </div>
     `;
 },
@@ -2134,6 +2144,14 @@ setupClinicalResearchEvents() {
         anchor.download = `ecci-crf-${recordId}-${Date.now()}.json`;
         anchor.click();
         URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('research-sticky-save')?.addEventListener('click', () => {
+        document.getElementById('research-form')?.requestSubmit();
+    });
+
+    document.getElementById('research-sticky-export')?.addEventListener('click', () => {
+        document.getElementById('research-export-btn')?.click();
     });
 
     document.getElementById('back-to-home')?.addEventListener('click', async () => {
