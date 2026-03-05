@@ -209,6 +209,23 @@ body {
     border-left-color: var(--primary-color);
 }
 
+.nav-item.research-highlight {
+    background: rgba(0, 153, 204, 0.08);
+    color: var(--primary-color);
+    border-left-color: var(--secondary-color);
+    font-weight: 600;
+}
+
+.nav-item.research-highlight:hover {
+    background: rgba(0, 153, 204, 0.14);
+    color: var(--primary-color);
+}
+
+.nav-item.research-highlight.active {
+    background: rgba(0, 102, 204, 0.16);
+    border-left-color: var(--primary-color);
+}
+
 .nav-item i {
     font-size: 1.2rem;
     width: 24px;
@@ -217,6 +234,22 @@ body {
 
 .nav-text {
     font-size: 0.95rem;
+}
+
+.nav-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 8px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    line-height: 1.2;
+    color: #fff;
+    background: #ef4444;
+    vertical-align: middle;
 }
 
 .sidebar-footer {
